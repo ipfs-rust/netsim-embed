@@ -1,5 +1,5 @@
 use crate::iface::Iface;
-use futures::channel::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use futures::channel::mpsc::{self, Receiver, Sender};
 use futures::future::Future;
 use futures::io::{AsyncReadExt, AsyncWriteExt};
 use futures::sink::SinkExt;
@@ -31,11 +31,13 @@ pub fn unshare_user() -> Result<(), io::Error> {
     Ok(())
 }
 
+/// Spawns a thread in a new network namespace and configures a TUN interface that sends and
+/// receives IP packets from the tx/rx channels and runs some UDP/TCP networking code in task.
 pub fn machine<F>(
     addr: Ipv4Addr,
     mask: u8,
-    mut tx: UnboundedSender<Vec<u8>>,
-    mut rx: UnboundedReceiver<Vec<u8>>,
+    mut tx: Sender<Vec<u8>>,
+    mut rx: Receiver<Vec<u8>>,
     task: F,
 ) -> thread::JoinHandle<F::Output>
 where
@@ -90,8 +92,8 @@ fn main() {
     unshare_user().unwrap();
     let a_addr: Ipv4Addr = "192.168.1.5".parse().unwrap();
     let b_addr = "192.168.1.6".parse().unwrap();
-    let (a_tx, b_rx) = mpsc::unbounded();
-    let (b_tx, a_rx) = mpsc::unbounded();
+    let (a_tx, b_rx) = mpsc::channel(0);
+    let (b_tx, a_rx) = mpsc::channel(0);
 
     let join1 = machine(a_addr.clone(), 24, a_tx, a_rx, async move {
         let socket = smol::Async::<UdpSocket>::bind("0.0.0.0:3000").unwrap();
