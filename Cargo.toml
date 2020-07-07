@@ -1,0 +1,11 @@
+[package]
+name = "smol-netsim"
+version = "0.1.0"
+authors = ["David Craven <david@craven.ch>"]
+edition = "2018"
+
+[dependencies]
+futures = "0.3.5"
+ioctl-sys = "0.5.2"
+libc = "0.2.71"
+smol = "0.1.18"
