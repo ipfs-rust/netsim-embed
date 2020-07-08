@@ -1,5 +1,5 @@
 use futures::channel::mpsc;
-use smol_netsim::{namespace, machine};
+use smol_netsim_machine::{namespace, machine};
 use std::net::{Ipv4Addr, SocketAddrV4, UdpSocket};
 
 fn main() {

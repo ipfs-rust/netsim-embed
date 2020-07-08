@@ -273,7 +273,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "smol-netsim"
+name = "smol-netsim-machine"
 version = "0.1.0"
 dependencies = [
  "futures",
