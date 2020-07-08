@@ -1,13 +1,16 @@
-use smol_netsim::{machine, namespace, wire};
-use std::net::{Ipv4Addr, SocketAddrV4, UdpSocket};
+use smol_netsim::{machine, namespace, wire, Ipv4Range, Ipv4Router};
+use std::net::{SocketAddrV4, UdpSocket};
 
 fn main() {
+    env_logger::init();
     namespace::unshare_user().unwrap();
-    let a_addr: Ipv4Addr = "192.168.1.5".parse().unwrap();
+    let range = Ipv4Range::new("192.168.1.0".parse().unwrap(), 24);
+    let a_addr = "192.168.1.5".parse().unwrap();
     let b_addr = "192.168.1.6".parse().unwrap();
-    let (a, b) = wire();
+    let (r1, a) = wire();
+    let (r2, b) = wire();
 
-    let join1 = machine(a_addr.clone(), 24, a, async move {
+    let join1 = machine(a_addr, 24, a, async move {
         let socket = smol::Async::<UdpSocket>::bind("0.0.0.0:3000").unwrap();
         loop {
             let mut buf = [0u8; 11];
@@ -33,6 +36,11 @@ fn main() {
             println!("received pong");
         }
     });
+
+    let mut router = Ipv4Router::new(range.gateway_addr());
+    router.add_connection(r1, vec![a_addr.into()]);
+    router.add_connection(r2, vec![b_addr.into()]);
+    smol::Task::spawn(router).detach();
 
     join1.join().unwrap();
     join2.join().unwrap();

@@ -16,7 +16,7 @@ impl std::fmt::Debug for Ipv4Range {
 impl Ipv4Range {
     /// Create an IPv4 range with the given base address and netmask prefix length.
     pub fn new(addr: Ipv4Addr, bits: u8) -> Self {
-        let mask = !((!0u32) >> bits);
+        let mask = !((!0u32).checked_shr(u32::from(bits)).unwrap_or(0));
         Self {
             addr: Ipv4Addr::from(u32::from(addr) & mask),
             bits,
@@ -42,7 +42,7 @@ impl Ipv4Range {
 
     /// Returns the netmask of this range.
     pub fn netmask(&self) -> Ipv4Addr {
-        Ipv4Addr::from(!((!0u32) >> self.bits))
+        Ipv4Addr::from(!((!0u32).checked_shr(u32::from(self.bits)).unwrap_or(0)))
     }
 
     /// Check whether a this range contains the given IP address.
@@ -50,6 +50,12 @@ impl Ipv4Range {
         let base_addr = u32::from(self.addr);
         let test_addr = u32::from(ip);
         (base_addr ^ test_addr).leading_zeros() >= u32::from(self.bits)
+    }
+}
+
+impl From<Ipv4Addr> for Ipv4Range {
+    fn from(addr: Ipv4Addr) -> Self {
+        Self::new(addr, 32)
     }
 }
 
@@ -76,6 +82,18 @@ impl Ipv4Route {
     /// Returns the route's gateway (if ayn).
     pub fn gateway(&self) -> Option<Ipv4Addr> {
         self.gateway
+    }
+}
+
+impl From<Ipv4Range> for Ipv4Route {
+    fn from(range: Ipv4Range) -> Self {
+        Self::new(range, None)
+    }
+}
+
+impl From<Ipv4Addr> for Ipv4Route {
+    fn from(addr: Ipv4Addr) -> Self {
+        Self::new(addr.into(), None)
     }
 }
 
