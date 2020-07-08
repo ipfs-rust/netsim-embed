@@ -24,6 +24,13 @@ pub fn unshare_user() -> Result<(), io::Error> {
 pub fn unshare_network() -> Result<(), io::Error> {
     unsafe {
         errno!(libc::unshare(libc::CLONE_NEWNET | libc::CLONE_NEWUTS))?;
+        let pid = errno!(libc::getpid())?;
+        let tid = errno!(libc::syscall(libc::SYS_gettid))?;
+        log::trace!(
+            "created network namespace: /proc/{}/task/{}/ns/net",
+            pid,
+            tid
+        );
+        Ok(())
     }
-    Ok(())
 }

@@ -80,6 +80,7 @@ impl Ipv4Nat {
                             dest_addr,
                             private_dest_addr,
                         );
+                        packet.set_checksum();
                         let _ = self.private_plug.unbounded_send(bytes);
                     } else {
                         packet.set_source(external_source_addr);
@@ -89,6 +90,7 @@ impl Ipv4Nat {
                             source_addr,
                             external_source_addr,
                         );
+                        packet.set_checksum();
                         let _ = self.public_plug.unbounded_send(bytes);
                     }
                 }
@@ -149,6 +151,7 @@ impl Ipv4Nat {
                             dest_addr,
                             private_dest_addr,
                         );
+                        packet.set_checksum();
                         let _ = self.private_plug.unbounded_send(bytes);
                     } else {
                         if self.blacklist_unrecognized_addrs {

@@ -54,6 +54,14 @@ impl Ipv4Range {
         let test_addr = u32::from(ip);
         (base_addr ^ test_addr).leading_zeros() >= u32::from(self.bits)
     }
+
+    /// Global ip range.
+    pub fn global() -> Self {
+        Self {
+            addr: Ipv4Addr::new(0, 0, 0, 0),
+            bits: 0,
+        }
+    }
 }
 
 impl From<Ipv4Addr> for Ipv4Range {
@@ -71,10 +79,7 @@ pub struct Ipv4Route {
 impl Ipv4Route {
     /// Create a new route with the given destination and gateway.
     pub fn new(dest: Ipv4Range, gateway: Option<Ipv4Addr>) -> Self {
-        Self {
-            dest,
-            gateway,
-        }
+        Self { dest, gateway }
     }
 
     /// Returns the destination IP range of the route.
@@ -115,7 +120,12 @@ impl Plug {
         let _ = self.tx.unbounded_send(packet);
     }
 
-    pub fn split(self) -> (mpsc::UnboundedSender<Vec<u8>>, mpsc::UnboundedReceiver<Vec<u8>>) {
+    pub fn split(
+        self,
+    ) -> (
+        mpsc::UnboundedSender<Vec<u8>>,
+        mpsc::UnboundedReceiver<Vec<u8>>,
+    ) {
         (self.tx, self.rx)
     }
 }

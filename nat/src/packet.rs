@@ -1,7 +1,7 @@
 use pnet_packet::ip::IpNextHeaderProtocols;
-use pnet_packet::ipv4::{Ipv4Packet, MutableIpv4Packet};
-use pnet_packet::tcp::{MutableTcpPacket, TcpPacket};
-use pnet_packet::udp::{MutableUdpPacket, UdpPacket};
+use pnet_packet::ipv4::{self, Ipv4Packet, MutableIpv4Packet};
+use pnet_packet::tcp::{self, MutableTcpPacket, TcpPacket};
+use pnet_packet::udp::{self, MutableUdpPacket, UdpPacket};
 use pnet_packet::{MutablePacket, Packet as _};
 use std::net::SocketAddrV4;
 
@@ -102,5 +102,22 @@ impl<'a> Packet<'a> {
 
     pub fn set_ttl(&mut self, ttl: u8) {
         MutableIpv4Packet::new(self.bytes).unwrap().set_ttl(ttl)
+    }
+
+    pub fn set_checksum(&mut self) {
+        let mut packet = MutableIpv4Packet::new(self.bytes).unwrap();
+        let source = packet.get_source();
+        let dest = packet.get_destination();
+        packet.set_checksum(ipv4::checksum(&packet.to_immutable()));
+        match self.protocol {
+            Protocol::Udp => {
+                let mut udp = MutableUdpPacket::new(packet.payload_mut()).unwrap();
+                udp.set_checksum(udp::ipv4_checksum(&udp.to_immutable(), &source, &dest));
+            }
+            Protocol::Tcp => {
+                let mut tcp = MutableTcpPacket::new(packet.payload_mut()).unwrap();
+                tcp.set_checksum(tcp::ipv4_checksum(&tcp.to_immutable(), &source, &dest));
+            }
+        }
     }
 }

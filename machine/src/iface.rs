@@ -1,3 +1,4 @@
+use smol_netsim_core::Ipv4Route;
 use std::ffi::{CStr, CString};
 use std::io::{self, Read, Write};
 use std::mem;
@@ -221,6 +222,54 @@ impl Iface {
             }
 
             let _ = libc::close(fd);
+            Ok(())
+        }
+    }
+
+    /// Adds an ipv4 route.
+    pub fn add_ipv4_route(&self, route: Ipv4Route) -> Result<(), io::Error> {
+        unsafe {
+            let fd = errno!(libc::socket(
+                libc::PF_INET as i32,
+                libc::SOCK_DGRAM as i32,
+                libc::IPPROTO_IP as i32,
+            ))
+            .unwrap();
+
+            let mut rtentry: libc::rtentry = mem::zeroed();
+
+            let rt_dst = &mut *(&mut rtentry.rt_dst as *mut _ as *mut libc::sockaddr_in);
+            rt_dst.sin_family = libc::AF_INET as u16;
+            rt_dst.sin_addr = libc::in_addr {
+                s_addr: u32::from(route.dest().base_addr()).to_be(),
+            };
+
+            let rt_genmask = &mut *(&mut rtentry.rt_genmask as *mut _ as *mut libc::sockaddr_in);
+            rt_genmask.sin_family = libc::AF_INET as u16;
+            rt_genmask.sin_addr = libc::in_addr {
+                s_addr: u32::from(route.dest().netmask()).to_be(),
+            };
+
+            rtentry.rt_flags = libc::RTF_UP as u16;
+
+            if let Some(gateway_addr) = route.gateway() {
+                let rt_gateway =
+                    &mut *(&mut rtentry.rt_gateway as *mut _ as *mut libc::sockaddr_in);
+                rt_gateway.sin_family = libc::AF_INET as u16;
+                rt_gateway.sin_addr = libc::in_addr {
+                    s_addr: u32::from(gateway_addr).to_be(),
+                };
+
+                rtentry.rt_flags |= libc::RTF_GATEWAY as u16;
+            }
+
+            rtentry.rt_dev = self.name.as_ptr() as *mut _;
+
+            if let Err(err) = errno!(libc::ioctl(fd, u64::from(libc::SIOCADDRT), &rtentry)) {
+                let _ = libc::close(fd);
+                return Err(err).unwrap();
+            }
+
             Ok(())
         }
     }

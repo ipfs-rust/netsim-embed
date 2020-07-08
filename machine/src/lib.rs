@@ -20,18 +20,13 @@ use futures::future::Future;
 use futures::io::{AsyncReadExt, AsyncWriteExt};
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
-use smol_netsim_core::Plug;
+use smol_netsim_core::{Ipv4Range, Plug};
 use std::net::Ipv4Addr;
 use std::thread;
 
 /// Spawns a thread in a new network namespace and configures a TUN interface that sends and
 /// receives IP packets from the tx/rx channels and runs some UDP/TCP networking code in task.
-pub fn machine<F>(
-    addr: Ipv4Addr,
-    mask: u8,
-    plug: Plug,
-    task: F,
-) -> thread::JoinHandle<F::Output>
+pub fn machine<F>(addr: Ipv4Addr, mask: u8, plug: Plug, task: F) -> thread::JoinHandle<F::Output>
 where
     F: Future + Send + 'static,
     F::Output: Send + 'static,
@@ -43,6 +38,7 @@ where
             let iface = iface::Iface::new().unwrap();
             iface.set_ipv4_addr(addr, mask).unwrap();
             iface.put_up().unwrap();
+            iface.add_ipv4_route(Ipv4Range::global().into()).unwrap();
 
             #[cfg(not(feature = "tokio2"))]
             let iface = smol::Async::new(iface).unwrap();
@@ -59,6 +55,7 @@ where
                     if n == 0 {
                         break;
                     }
+                    log::info!("machine {}: sending packet", addr);
                     if tx.send(buf[..n].to_vec()).await.is_err() {
                         break;
                     }
@@ -68,6 +65,7 @@ where
             let writer_task = async move {
                 loop {
                     if let Some(packet) = rx.next().await {
+                        log::info!("machine {}: received packet", addr);
                         let n = writer.write(&packet).await.unwrap();
                         if n == 0 {
                             break;

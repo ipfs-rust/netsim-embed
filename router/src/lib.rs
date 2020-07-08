@@ -49,7 +49,11 @@ impl Ipv4Router {
                     return;
                 }
             }
-            log::info!("router {}: dropping unroutable packet", self.addr);
+            log::info!(
+                "router {}: dropping unroutable packet to {}",
+                self.addr,
+                dest
+            );
         }
     }
 }

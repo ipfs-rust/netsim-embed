@@ -1,16 +1,19 @@
-use smol_netsim::{machine, namespace, wire, Ipv4Range, Ipv4Router};
+use smol_netsim::{machine, namespace, wire, Ipv4NatBuilder, Ipv4Range, Ipv4Router};
 use std::net::{SocketAddrV4, UdpSocket};
 
 fn main() {
     env_logger::init();
     namespace::unshare_user().unwrap();
-    let range = Ipv4Range::new("192.168.1.0".parse().unwrap(), 24);
-    let a_addr = "192.168.1.5".parse().unwrap();
-    let b_addr = "192.168.1.6".parse().unwrap();
-    let (r1, a) = wire();
-    let (r2, b) = wire();
+    let range_private = Ipv4Range::new("192.168.1.0".parse().unwrap(), 24);
+    let range_public = Ipv4Range::new("8.8.8.0".parse().unwrap(), 24);
+    let addr_client = "192.168.1.5".parse().unwrap();
+    let addr_server = "8.8.8.4".parse().unwrap();
+    let addr_nat = "8.8.8.8".parse().unwrap();
+    let (plug_nat_private, plug_client) = wire();
+    let (plug_router_1, plug_nat_public) = wire();
+    let (plug_router_2, plug_server) = wire();
 
-    let join1 = machine(a_addr, 24, a, async move {
+    let server = machine(addr_server, 24, plug_server, async move {
         let socket = smol::Async::<UdpSocket>::bind("0.0.0.0:3000").unwrap();
         loop {
             let mut buf = [0u8; 11];
@@ -23,10 +26,10 @@ fn main() {
         }
     });
 
-    let join2 = machine(b_addr, 24, b, async move {
-        let socket = smol::Async::<UdpSocket>::bind("0.0.0.0:3000").unwrap();
+    let client = machine(addr_client, 24, plug_client, async move {
+        let socket = smol::Async::<UdpSocket>::bind("0.0.0.0:0").unwrap();
         socket
-            .send_to(b"ping", SocketAddrV4::new(a_addr, 3000))
+            .send_to(b"ping", SocketAddrV4::new(addr_server, 3000))
             .await
             .unwrap();
 
@@ -37,11 +40,15 @@ fn main() {
         }
     });
 
-    let mut router = Ipv4Router::new(range.gateway_addr());
-    router.add_connection(r1, vec![a_addr.into()]);
-    router.add_connection(r2, vec![b_addr.into()]);
+    let nat =
+        Ipv4NatBuilder::new().build(plug_nat_public, plug_nat_private, addr_nat, range_private);
+    smol::Task::spawn(nat).detach();
+
+    let mut router = Ipv4Router::new(range_public.gateway_addr());
+    router.add_connection(plug_router_1, vec![addr_nat.into()]);
+    router.add_connection(plug_router_2, vec![addr_server.into()]);
     smol::Task::spawn(router).detach();
 
-    join1.join().unwrap();
-    join2.join().unwrap();
+    server.join().unwrap();
+    client.join().unwrap();
 }

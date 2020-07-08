@@ -675,6 +675,7 @@ dependencies = [
  "futures",
  "ioctl-sys",
  "libc",
+ "log 0.4.8",
  "mio",
  "smol",
  "smol-netsim-core",
