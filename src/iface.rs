@@ -114,25 +114,13 @@ impl Drop for Iface {
 
 impl Read for Iface {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        Ok(unsafe {
-            errno!(libc::read(
-                self.as_raw_fd(),
-                buf.as_mut_ptr() as *mut _,
-                buf.len()
-            ))? as _
-        })
+        self.recv(buf)
     }
 }
 
 impl Write for Iface {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        Ok(unsafe {
-            errno!(libc::write(
-                self.as_raw_fd(),
-                buf.as_ptr() as *mut _,
-                buf.len()
-            ))? as _
-        })
+        self.send(buf)
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -169,6 +157,28 @@ impl Iface {
     /// Returns the name of the iface.
     pub fn name(&self) -> &CStr {
         &self.name
+    }
+
+    /// Receives a packet.
+    pub fn recv(&self, buf: &mut [u8]) -> Result<usize, io::Error> {
+        Ok(unsafe {
+            errno!(libc::read(
+                self.as_raw_fd(),
+                buf.as_mut_ptr() as *mut _,
+                buf.len()
+            ))? as _
+        })
+    }
+
+    /// Sends a packet.
+    pub fn send(&self, buf: &[u8]) -> Result<usize, io::Error> {
+        Ok(unsafe {
+            errno!(libc::write(
+                self.as_raw_fd(),
+                buf.as_ptr() as *mut _,
+                buf.len()
+            ))? as _
+        })
     }
 
     /// Set an interface IPv4 address and netmask
