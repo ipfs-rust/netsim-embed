@@ -13,12 +13,14 @@ macro_rules! errno {
 
 pub mod iface;
 pub mod namespace;
+#[cfg(feature = "tokio2")]
+pub mod tokio;
 
 use futures::channel::mpsc;
 use futures::future::Future;
-use futures::stream::StreamExt;
-use futures::sink::SinkExt;
 use futures::io::{AsyncReadExt, AsyncWriteExt};
+use futures::sink::SinkExt;
+use futures::stream::StreamExt;
 use std::net::Ipv4Addr;
 use std::thread;
 
@@ -37,14 +39,20 @@ where
 {
     thread::spawn(move || {
         namespace::unshare_network().unwrap();
-        let iface = iface::Iface::new().unwrap();
-        iface.set_ipv4_addr(addr, mask).unwrap();
-        iface.put_up().unwrap();
-        let iface = smol::Async::new(iface).unwrap();
-        let (mut reader, mut writer) = iface.split();
 
-        smol::run(async move {
-            smol::Task::local(async move {
+        let create_tun_iface = || {
+            let iface = iface::Iface::new().unwrap();
+            iface.set_ipv4_addr(addr, mask).unwrap();
+            iface.put_up().unwrap();
+
+            #[cfg(not(feature = "tokio2"))]
+            let iface = smol::Async::new(iface).unwrap();
+            #[cfg(feature = "tokio2")]
+            let iface = tokio::TokioFd::new(iface).unwrap();
+
+            let (mut reader, mut writer) = iface.split();
+
+            let reader_task = async move {
                 loop {
                     let mut buf = [0; libc::ETH_FRAME_LEN as usize];
                     let n = reader.read(&mut buf).await.unwrap();
@@ -55,10 +63,9 @@ where
                         break;
                     }
                 }
-            })
-            .detach();
+            };
 
-            smol::Task::local(async move {
+            let writer_task = async move {
                 loop {
                     if let Some(packet) = rx.next().await {
                         let n = writer.write(&packet).await.unwrap();
@@ -69,10 +76,29 @@ where
                         break;
                     }
                 }
-            })
-            .detach();
+            };
 
+            (reader_task, writer_task)
+        };
+
+        #[cfg(not(feature = "tokio2"))]
+        let result = smol::run(async move {
+            let (reader_task, writer_task) = create_tun_iface();
+            smol::Task::spawn(reader_task).detach();
+            smol::Task::spawn(writer_task).detach();
             task.await
-        })
+        });
+        #[cfg(feature = "tokio2")]
+        let result = {
+            let mut rt = ::tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async move {
+                let (reader_task, writer_task) = create_tun_iface();
+                ::tokio::task::spawn(reader_task);
+                ::tokio::task::spawn(writer_task);
+                task.await
+            })
+        };
+
+        result
     })
 }

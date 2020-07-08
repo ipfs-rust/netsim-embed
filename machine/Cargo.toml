@@ -4,8 +4,16 @@ version = "0.1.0"
 authors = ["David Craven <david@craven.ch>"]
 edition = "2018"
 
+[features]
+tokio2 = ["mio", "tokio"]
+
 [dependencies]
 futures = "0.3.5"
 ioctl-sys = "0.5.2"
 libc = "0.2.71"
+mio = { version = "0.6.20", optional = true }
 smol = "0.1.18"
+tokio = { version = "0.2.21", features = ["io-driver", "rt-threaded"], optional = true }
+
+[dev-dependencies]
+tokio = { version = "0.2.21", features = ["udp"] }
