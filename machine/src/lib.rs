@@ -90,7 +90,11 @@ where
         });
         #[cfg(feature = "tokio2")]
         let result = {
-            let mut rt = ::tokio::runtime::Runtime::new().unwrap();
+            let mut rt = ::tokio::runtime::Builder::new()
+                .threaded_scheduler()
+                .enable_all()
+                .build()
+                .unwrap();
             rt.block_on(async move {
                 let (reader_task, writer_task) = create_tun_iface();
                 ::tokio::task::spawn(reader_task);

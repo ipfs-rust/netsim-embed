@@ -1,4 +1,4 @@
-use futures::channel::mpsc;
+use smol_netsim_core::wire;
 use smol_netsim_machine::{machine, namespace};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use tokio::net::UdpSocket;
@@ -7,10 +7,9 @@ fn main() {
     namespace::unshare_user().unwrap();
     let a_addr: Ipv4Addr = "192.168.1.5".parse().unwrap();
     let b_addr = "192.168.1.6".parse().unwrap();
-    let (a_tx, b_rx) = mpsc::channel(0);
-    let (b_tx, a_rx) = mpsc::channel(0);
+    let (a, b) = wire();
 
-    let join1 = machine(a_addr.clone(), 24, a_tx, a_rx, async move {
+    let join1 = machine(a_addr.clone(), 24, a, async move {
         let mut socket = UdpSocket::bind(SocketAddrV4::new(0.into(), 3000))
             .await
             .unwrap();
@@ -25,7 +24,7 @@ fn main() {
         }
     });
 
-    let join2 = machine(b_addr, 24, b_tx, b_rx, async move {
+    let join2 = machine(b_addr, 24, b, async move {
         let mut socket = UdpSocket::bind(SocketAddrV4::new(0.into(), 3000))
             .await
             .unwrap();
