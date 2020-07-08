@@ -82,18 +82,6 @@ mod ioctl {
     ioctl!(write tunsetiff with b'T', 202; libc::c_int);
 }
 
-#[macro_export]
-macro_rules! errno {
-    ($res:expr) => {{
-        let res = $res;
-        if res < 0 {
-            Err(io::Error::last_os_error())
-        } else {
-            Ok(res)
-        }
-    }};
-}
-
 /// See: https://www.kernel.org/doc/Documentation/networking/tuntap.txt
 pub struct Iface {
     name: CString,
