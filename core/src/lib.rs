@@ -1,5 +1,8 @@
 use futures::channel::mpsc;
+use futures::stream::Stream;
 use std::net::Ipv4Addr;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
 #[derive(Clone, Copy)]
 pub struct Ipv4Range {
@@ -104,6 +107,14 @@ pub struct Plug {
 }
 
 impl Plug {
+    pub fn poll_incoming(&mut self, cx: &mut Context) -> Poll<Option<Vec<u8>>> {
+        Pin::new(&mut self.rx).poll_next(cx)
+    }
+
+    pub fn unbounded_send(&mut self, packet: Vec<u8>) {
+        let _ = self.tx.unbounded_send(packet);
+    }
+
     pub fn split(self) -> (mpsc::UnboundedSender<Vec<u8>>, mpsc::UnboundedReceiver<Vec<u8>>) {
         (self.tx, self.rx)
     }
