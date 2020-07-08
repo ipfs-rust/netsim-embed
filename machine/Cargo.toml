@@ -15,6 +15,3 @@ mio = { version = "0.6.20", optional = true }
 smol = "0.1.18"
 smol-netsim-core = { path = "../core" }
 tokio = { version = "0.2.21", features = ["io-driver", "rt-threaded"], optional = true }
-
-[dev-dependencies]
-tokio = { version = "0.2.21", features = ["udp"] }

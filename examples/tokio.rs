@@ -1,5 +1,4 @@
-use smol_netsim_core::wire;
-use smol_netsim_machine::{machine, namespace};
+use smol_netsim::{machine, namespace, wire};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use tokio::net::UdpSocket;
 

@@ -1,2 +1,21 @@
 [workspace]
-members = ["core", "machine", "router"]
+members = ["core", "machine", "router", "."]
+
+[features]
+tokio2 = ["smol-netsim-machine/tokio2"]
+
+[package]
+name = "smol-netsim"
+version = "0.1.0"
+authors = ["David Craven <david@craven.ch>"]
+edition = "2018"
+
+[dependencies]
+smol-netsim-core = { path = "core" }
+smol-netsim-machine = { path = "machine" }
+smol-netsim-router = { path = "router" }
+
+[dev-dependencies]
+env_logger = "0.7.1"
+smol = "0.1.18"
+tokio = { version = "0.2.21", features = ["udp"] }
