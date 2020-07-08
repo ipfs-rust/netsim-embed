@@ -1,0 +1,8 @@
+[package]
+name = "smol-netsim-core"
+version = "0.1.0"
+authors = ["David Craven <david@craven.ch>"]
+edition = "2018"
+
+[dependencies]
+futures = "0.3.5"

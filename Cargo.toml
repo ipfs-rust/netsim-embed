@@ -1,2 +1,2 @@
 [workspace]
-members = ["machine"]
+members = ["core", "machine", "router"]

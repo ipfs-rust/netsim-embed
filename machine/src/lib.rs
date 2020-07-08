@@ -16,11 +16,11 @@ pub mod namespace;
 #[cfg(feature = "tokio2")]
 pub mod tokio;
 
-use futures::channel::mpsc;
 use futures::future::Future;
 use futures::io::{AsyncReadExt, AsyncWriteExt};
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
+use smol_netsim_core::Plug;
 use std::net::Ipv4Addr;
 use std::thread;
 
@@ -29,8 +29,7 @@ use std::thread;
 pub fn machine<F>(
     addr: Ipv4Addr,
     mask: u8,
-    mut tx: mpsc::Sender<Vec<u8>>,
-    mut rx: mpsc::Receiver<Vec<u8>>,
+    plug: Plug,
     task: F,
 ) -> thread::JoinHandle<F::Output>
 where
@@ -50,6 +49,7 @@ where
             #[cfg(feature = "tokio2")]
             let iface = tokio::TokioFd::new(iface).unwrap();
 
+            let (mut tx, mut rx) = plug.split();
             let (mut reader, mut writer) = iface.split();
 
             let reader_task = async move {
