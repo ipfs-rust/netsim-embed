@@ -1,9 +1,6 @@
 [workspace]
 members = ["core", "machine", "nat", "router", "."]
 
-[features]
-tokio2 = ["netsim-embed-machine/tokio2"]
-
 [package]
 name = "netsim-embed"
 version = "0.1.0"
@@ -11,15 +8,13 @@ authors = ["David Craven <david@craven.ch>"]
 edition = "2018"
 
 [dependencies]
+env_logger = "0.7.1"
 netsim-embed-core = { path = "core" }
 netsim-embed-machine = { path = "machine" }
 netsim-embed-nat = { path = "nat" }
 netsim-embed-router = { path = "router" }
 pnet_packet = "0.26.0"
 smol = "0.1.18"
-env_logger = "0.7.1"
 
 [dev-dependencies]
-env_logger = "0.7.1"
-smol = "0.1.18"
-tokio = { version = "0.2.21", features = ["udp"] }
+ipfs-embed = "0.1.1"

@@ -35,6 +35,10 @@ impl RoutablePlug {
         self.addr
     }
 
+    pub fn range(&self) -> Ipv4Range {
+        Ipv4Range::new(self.addr, self.mask)
+    }
+
     fn to_route(&self) -> Ipv4Route {
         if self.router {
             Ipv4Range::new(self.addr, self.mask).into()
@@ -67,7 +71,6 @@ where
 
 #[derive(Clone, Copy, Debug)]
 pub struct NatConfig {
-    pub public_ip: Ipv4Addr,
     pub hair_pinning: bool,
     pub symmetric: bool,
     pub blacklist_unrecognized_addrs: bool,
@@ -77,7 +80,6 @@ pub struct NatConfig {
 impl Default for NatConfig {
     fn default() -> Self {
         Self {
-            public_ip: Ipv4Range::global().random_client_addr(),
             hair_pinning: false,
             symmetric: false,
             blacklist_unrecognized_addrs: false,
@@ -86,10 +88,11 @@ impl Default for NatConfig {
     }
 }
 
-pub fn nat(config: NatConfig, plug: RoutablePlug) -> RoutablePlug {
+pub fn nat(config: NatConfig, range: Ipv4Range, plug: RoutablePlug) -> RoutablePlug {
     let (a, b) = wire();
-    let private_range = Ipv4Range::new(plug.addr, plug.mask);
-    let mut nat = Ipv4Nat::new(b, plug.plug, config.public_ip, private_range);
+    let public_ip = range.random_client_addr();
+    let private_range = plug.range();
+    let mut nat = Ipv4Nat::new(b, plug.plug, public_ip, private_range);
     nat.set_hair_pinning(config.hair_pinning);
     nat.set_symmetric(config.symmetric);
     nat.set_blacklist_unrecognized_addrs(config.blacklist_unrecognized_addrs);
@@ -97,31 +100,65 @@ pub fn nat(config: NatConfig, plug: RoutablePlug) -> RoutablePlug {
     smol::Task::spawn(nat).detach();
     RoutablePlug {
         plug: a,
-        addr: config.public_ip,
+        addr: public_ip,
         mask: 32,
         router: false,
         tasks: plug.tasks,
     }
 }
 
-pub fn router(range: Ipv4Range, mut plug1: RoutablePlug, plug2: RoutablePlug) -> RoutablePlug {
+pub fn router(range: Ipv4Range, mut plugs: Vec<RoutablePlug>) -> RoutablePlug {
+    if plugs.len() < 2 {
+        return plugs.remove(0);
+    }
     let (a, b) = wire();
     let addr = range.gateway_addr();
     let mask = range.netmask_prefix_length();
-    let route1 = plug1.to_route();
-    let route2 = plug2.to_route();
-    plug1.tasks.extend(plug2.tasks);
+
+    let mut router = Ipv4Router::new(addr);
+    let mut tasks = vec![];
+    for plug in plugs {
+        let route = plug.to_route();
+        router.add_connection(plug.plug, vec![route]);
+        tasks.extend(plug.tasks);
+    }
     let plug = RoutablePlug {
         plug: a,
         addr,
         mask,
         router: true,
-        tasks: plug1.tasks,
+        tasks,
     };
-    let mut router = Ipv4Router::new(addr);
-    router.add_connection(plug1.plug, vec![route1]);
-    router.add_connection(plug2.plug, vec![route2]);
     router.add_connection(b, vec![plug.to_route()]);
     smol::Task::spawn(router).detach();
     plug
+}
+
+pub struct StarConfig {
+    pub nat_config: NatConfig,
+    pub num_public: u8,
+    pub num_nat: u8,
+    pub num_private: u8,
+}
+
+pub fn star<B, F>(config: StarConfig, builder: B) -> RoutablePlug
+where
+    B: Fn() -> F,
+    F: Future<Output = ()> + Send + 'static,
+{
+    let mut peers = vec![];
+    for _ in 0..config.num_nat {
+        let mut local_peers = vec![];
+        let subnet = Ipv4Range::random_local_subnet();
+        for _ in 0..config.num_private {
+            local_peers.push(machine(subnet, builder()));
+        }
+        let router = router(subnet, local_peers);
+        let nat = nat(config.nat_config, Ipv4Range::global(), router);
+        peers.push(nat);
+    }
+    for _ in 0..config.num_public {
+        peers.push(machine(Ipv4Range::global(), builder()));
+    }
+    router(Ipv4Range::global(), peers)
 }

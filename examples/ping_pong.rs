@@ -31,7 +31,7 @@ fn main() {
             }
         });
 
-        let nat = nat(NatConfig::default(), client);
-        router(Ipv4Range::global(), nat, server)
+        let nat = nat(NatConfig::default(), Ipv4Range::global(), client);
+        router(Ipv4Range::global(), vec![nat, server])
     });
 }
