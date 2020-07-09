@@ -134,6 +134,7 @@ pub fn router(range: Ipv4Range, mut plugs: Vec<RoutablePlug>) -> RoutablePlug {
     plug
 }
 
+#[derive(Clone, Default)]
 pub struct StarConfig {
     pub nat_config: NatConfig,
     pub num_public: u8,
@@ -143,7 +144,7 @@ pub struct StarConfig {
 
 pub fn star<B, F>(config: StarConfig, builder: B) -> RoutablePlug
 where
-    B: Fn() -> F,
+    B: Fn(u32, u32) -> F,
     F: Future<Output = ()> + Send + 'static,
 {
     let mut peers = vec![];
@@ -161,4 +162,14 @@ where
         peers.push(machine(Ipv4Range::global(), builder()));
     }
     router(Ipv4Range::global(), peers)
+}
+
+pub fn run_star<B, F>(config: StarConfig, builder: B)
+where
+    B: Fn() -> F,
+    F: Future<Output = ()> + Send + 'static,
+{
+    run_star(async move {
+        star(config, builder)
+    })
 }
