@@ -16,6 +16,8 @@ netsim-embed-machine = { path = "machine" }
 netsim-embed-nat = { path = "nat" }
 netsim-embed-router = { path = "router" }
 pnet_packet = "0.26.0"
+smol = "0.1.18"
+env_logger = "0.7.1"
 
 [dev-dependencies]
 env_logger = "0.7.1"

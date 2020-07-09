@@ -62,19 +62,26 @@ impl Future for Ipv4Router {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-        let mut all_disconnected = true;
-        for i in 0..self.rxs.len() {
-            all_disconnected &= loop {
+        let mut i = 0;
+        while i < self.rxs.len() {
+            loop {
                 let packet = match Pin::new(&mut self.rxs[i]).poll_next(cx) {
-                    Poll::Pending => break false,
-                    Poll::Ready(None) => break true,
+                    Poll::Pending => {
+                        i += 1;
+                        break;
+                    }
+                    Poll::Ready(None) => {
+                        self.rxs.remove(i);
+                        self.txs.remove(i);
+                        break;
+                    }
                     Poll::Ready(Some(packet)) => packet,
                 };
                 self.process_packet(packet)
             }
         }
 
-        if all_disconnected {
+        if self.rxs.is_empty() {
             return Poll::Ready(());
         }
 
