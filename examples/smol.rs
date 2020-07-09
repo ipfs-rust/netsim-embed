@@ -4,11 +4,11 @@ use std::net::{SocketAddrV4, UdpSocket};
 fn main() {
     env_logger::init();
     namespace::unshare_user().unwrap();
-    let range_private = Ipv4Range::new("192.168.1.0".parse().unwrap(), 24);
-    let range_public = Ipv4Range::new("8.8.8.0".parse().unwrap(), 24);
-    let addr_client = "192.168.1.5".parse().unwrap();
-    let addr_server = "8.8.8.4".parse().unwrap();
-    let addr_nat = "8.8.8.8".parse().unwrap();
+    let range_private = Ipv4Range::random_local_subnet();
+    let range_public = Ipv4Range::global();
+    let addr_client = range_private.random_client_addr();
+    let addr_server = range_public.random_client_addr();
+    let addr_nat = range_public.random_client_addr();
     let (plug_nat_private, plug_client) = wire();
     let (plug_router_1, plug_nat_public) = wire();
     let (plug_router_2, plug_server) = wire();
