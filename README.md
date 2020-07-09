@@ -1,5 +1,5 @@
 # netsim-embed
-A small embeddable network simulator.
+A small embeddable network simulator based on the currently unmaintained [netsim][netsim].
 
 Run the example:
 
@@ -47,3 +47,5 @@ MPTcpExt:
 
 ## License
 MIT OR Apache-2.0
+
+[netsim]: https://github.com/canndrew/netsim
