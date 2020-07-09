@@ -1,4 +1,4 @@
-use netsim_embed::{machine, namespace, wire, Ipv4NatBuilder, Ipv4Range, Ipv4Router};
+use netsim_embed::{machine, namespace, wire, Ipv4Nat, Ipv4Range, Ipv4Router};
 use std::net::{SocketAddrV4, UdpSocket};
 
 fn main() {
@@ -40,8 +40,7 @@ fn main() {
         }
     });
 
-    let nat =
-        Ipv4NatBuilder::new().build(plug_nat_public, plug_nat_private, addr_nat, range_private);
+    let nat = Ipv4Nat::new(plug_nat_public, plug_nat_private, addr_nat, range_private);
     smol::Task::spawn(nat).detach();
 
     let mut router = Ipv4Router::new(range_public.gateway_addr());
