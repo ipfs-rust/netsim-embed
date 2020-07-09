@@ -1,8 +1,9 @@
-use smol_netsim::{machine, namespace, wire};
+use netsim_embed::{machine, namespace, wire};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use tokio::net::UdpSocket;
 
 fn main() {
+    env_logger::init();
     namespace::unshare_user().unwrap();
     let a_addr: Ipv4Addr = "192.168.1.5".parse().unwrap();
     let b_addr = "192.168.1.6".parse().unwrap();

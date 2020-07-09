@@ -1,4 +1,4 @@
-//! Smol network simulator.
+//! Small embeddable network simulator.
 
 macro_rules! errno {
     ($res:expr) => {{
@@ -20,7 +20,7 @@ use futures::future::Future;
 use futures::io::{AsyncReadExt, AsyncWriteExt};
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
-use smol_netsim_core::{Ipv4Range, Plug};
+use netsim_embed_core::{Ipv4Range, Plug};
 use std::net::Ipv4Addr;
 use std::thread;
 

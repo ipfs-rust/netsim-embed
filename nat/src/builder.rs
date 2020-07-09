@@ -1,7 +1,7 @@
 use crate::nat::Ipv4Nat;
 use crate::port_allocator::PortAllocator;
 use crate::port_map::{PortMap, SymmetricMap};
-use smol_netsim_core::{Ipv4Range, Plug};
+use netsim_embed_core::{Ipv4Range, Plug};
 use std::collections::{HashMap, HashSet};
 use std::net::{Ipv4Addr, SocketAddrV4};
 

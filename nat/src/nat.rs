@@ -1,7 +1,7 @@
 use crate::packet::{Packet, Protocol};
 use crate::port_map::PortMap;
 use futures::future::Future;
-use smol_netsim_core::{Ipv4Range, Plug};
+use netsim_embed_core::{Ipv4Range, Plug};
 use std::collections::HashSet;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::pin::Pin;

@@ -1,4 +1,4 @@
-use smol_netsim::{machine, namespace, wire, Ipv4NatBuilder, Ipv4Range, Ipv4Router};
+use netsim_embed::{machine, namespace, wire, Ipv4NatBuilder, Ipv4Range, Ipv4Router};
 use std::net::{SocketAddrV4, UdpSocket};
 
 fn main() {

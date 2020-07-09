@@ -380,6 +380,62 @@ dependencies = [
 ]
 
 [[package]]
+name = "netsim-embed"
+version = "0.1.0"
+dependencies = [
+ "env_logger",
+ "netsim-embed-core",
+ "netsim-embed-machine",
+ "netsim-embed-nat",
+ "netsim-embed-router",
+ "pnet_packet",
+ "smol",
+ "tokio",
+]
+
+[[package]]
+name = "netsim-embed-core"
+version = "0.1.0"
+dependencies = [
+ "futures",
+]
+
+[[package]]
+name = "netsim-embed-machine"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "ioctl-sys",
+ "libc",
+ "log 0.4.8",
+ "mio",
+ "netsim-embed-core",
+ "smol",
+ "tokio",
+]
+
+[[package]]
+name = "netsim-embed-nat"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "log 0.4.8",
+ "netsim-embed-core",
+ "pnet_packet",
+ "rand",
+]
+
+[[package]]
+name = "netsim-embed-router"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "log 0.4.8",
+ "netsim-embed-core",
+ "pnet_packet",
+]
+
+[[package]]
 name = "num_cpus"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -646,61 +702,6 @@ dependencies = [
  "socket2",
  "wepoll-sys-stjepang",
  "winapi 0.3.9",
-]
-
-[[package]]
-name = "smol-netsim"
-version = "0.1.0"
-dependencies = [
- "env_logger",
- "smol",
- "smol-netsim-core",
- "smol-netsim-machine",
- "smol-netsim-nat",
- "smol-netsim-router",
- "tokio",
-]
-
-[[package]]
-name = "smol-netsim-core"
-version = "0.1.0"
-dependencies = [
- "futures",
-]
-
-[[package]]
-name = "smol-netsim-machine"
-version = "0.1.0"
-dependencies = [
- "futures",
- "ioctl-sys",
- "libc",
- "log 0.4.8",
- "mio",
- "smol",
- "smol-netsim-core",
- "tokio",
-]
-
-[[package]]
-name = "smol-netsim-nat"
-version = "0.1.0"
-dependencies = [
- "futures",
- "log 0.4.8",
- "pnet_packet",
- "rand",
- "smol-netsim-core",
-]
-
-[[package]]
-name = "smol-netsim-router"
-version = "0.1.0"
-dependencies = [
- "futures",
- "log 0.4.8",
- "pnet_packet",
- "smol-netsim-core",
 ]
 
 [[package]]

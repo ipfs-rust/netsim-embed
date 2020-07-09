@@ -1,5 +1,5 @@
 [package]
-name = "smol-netsim-core"
+name = "netsim-embed-core"
 version = "0.1.0"
 authors = ["David Craven <david@craven.ch>"]
 edition = "2018"

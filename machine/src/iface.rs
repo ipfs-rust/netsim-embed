@@ -1,4 +1,4 @@
-use smol_netsim_core::Ipv4Route;
+use netsim_embed_core::Ipv4Route;
 use std::ffi::{CStr, CString};
 use std::io::{self, Read, Write};
 use std::mem;

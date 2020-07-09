@@ -1,5 +1,5 @@
 [package]
-name = "smol-netsim-router"
+name = "netsim-embed-router"
 version = "0.1.0"
 authors = ["David Craven <david@craven.ch>"]
 edition = "2018"
@@ -7,5 +7,5 @@ edition = "2018"
 [dependencies]
 futures = "0.3.5"
 log = "0.4.8"
+netsim-embed-core = { path = "../core" }
 pnet_packet = "0.26.0"
-smol-netsim-core = { path = "../core" }
