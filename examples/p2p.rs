@@ -1,15 +1,73 @@
-use netsim_embed::{run_star, NatConfig, StarConfig};
+use futures::channel::mpsc;
+use futures::sink::SinkExt;
+use futures::stream::StreamExt;
 use ipfs_embed::{Config, Store};
+use libipld::cid::{Cid, Codec};
+use libipld::multihash::Sha2_256;
+use libipld::store::{ReadonlyStore, Store as _, Visibility};
+use netsim_embed::{run, NetworkBuilder, Ipv4Range};
+use tempdir::TempDir;
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum Command {
+    Insert(Cid, Vec<u8>),
+    Get(Cid),
+}
+
+impl Command {
+    pub fn insert(bytes: &[u8]) -> Self {
+        let hash = Sha2_256::digest(&bytes);
+        let cid = Cid::new_v1(Codec::Raw, hash);
+        Self::Insert(cid, bytes.to_vec())
+    }
+
+    pub fn get(bytes: &[u8]) -> Self {
+        let hash = Sha2_256::digest(&bytes);
+        let cid = Cid::new_v1(Codec::Raw, hash);
+        Self::Get(cid)
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum Event {
+    Inserted,
+    Got(Vec<u8>),
+}
 
 fn main() {
-    let mut config = StarConfig::default();
-    config.num_public = 2;
+    run(async {
+        let mut net = NetworkBuilder::new("8.8.8.0/24".parse().unwrap());
+        let builder = |mut cmd: mpsc::Receiver<Command>, mut event: mpsc::Sender<Event>| async move {
+            let tmp = TempDir::new("netsim_embed").unwrap();
+            let config = Config::from_path(tmp.path()).unwrap();
+            let store = Store::new(config).unwrap();
 
-    run_star(config, |_net, node| {
-        let tmp = TempDir::new("netsim_embed");
-        let config = Config::from_path(tmp.as_path());
-        let store = Store::new(config);
-        store.insert(node).await.unwrap();
-        store.get((node + 1) % 2).await.unwrap();
+            while let Some(cmd) = cmd.next().await {
+                match cmd {
+                    Command::Insert(cid, bytes) => {
+                        store.insert(&cid, bytes.into_boxed_slice(), Visibility::Public).await.unwrap();
+                        event.send(Event::Inserted).await.unwrap();
+                    }
+                    Command::Get(cid) => {
+                        let bytes = store.get(&cid).await.unwrap().to_vec();
+                        event.send(Event::Got(bytes)).await.unwrap();
+                    }
+                }
+            }
+        };
+
+        net.spawn_machine(builder.clone());
+        net.spawn_machine(builder);
+        let mut net = net.spawn();
+        {
+            let m = net.machine(0);
+            m.send(Command::insert(b"hello world")).await;
+            assert_eq!(m.recv().await.unwrap(), Event::Inserted);
+        }
+        {
+            let m = net.machine(1);
+            m.send(Command::get(b"hello world")).await;
+            assert_eq!(m.recv().await.unwrap(), Event::Got(b"hello world".to_vec()));
+        }
     })
 }

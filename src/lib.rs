@@ -1,71 +1,64 @@
 pub use netsim_embed_core::Ipv4Range;
 use netsim_embed_core::*;
-use netsim_embed_machine::namespace;
+use netsim_embed_machine::*;
 use netsim_embed_nat::*;
 use netsim_embed_router::*;
 pub use pnet_packet::*;
-use std::future::Future;
+use futures::channel::mpsc;
+use futures::future::Future;
+use futures::sink::SinkExt;
+use futures::stream::StreamExt;
+
 use std::net::Ipv4Addr;
 
 pub fn run<F>(f: F)
 where
-    F: Future<Output = RoutablePlug> + Send + 'static,
+    F: Future<Output = ()> + Send + 'static,
 {
     env_logger::init();
     namespace::unshare_user().unwrap();
-    smol::run(async move {
-        let plug = f.await;
-        for task in plug.tasks {
-            task.await;
-        }
-    });
+    smol::run(f);
 }
 
 #[derive(Debug)]
-pub struct RoutablePlug {
-    plug: Plug,
+pub struct Machine<C, E> {
     addr: Ipv4Addr,
-    mask: u8,
-    router: bool,
-    tasks: Vec<smol::Task<()>>,
+    tx: mpsc::Sender<C>,
+    rx: mpsc::Receiver<E>,
 }
 
-impl RoutablePlug {
+impl<C: Send + 'static, E: Send + 'static> Machine<C, E> {
     pub fn addr(&self) -> Ipv4Addr {
         self.addr
     }
 
-    pub fn range(&self) -> Ipv4Range {
-        Ipv4Range::new(self.addr, self.mask)
+    pub async fn send(&mut self, cmd: C) {
+        self.tx.send(cmd).await.unwrap();
     }
 
-    fn to_route(&self) -> Ipv4Route {
-        if self.router {
-            Ipv4Range::new(self.addr, self.mask).into()
-        } else {
-            self.addr.into()
-        }
+    pub async fn recv(&mut self) -> Option<E> {
+        self.rx.next().await
     }
 }
 
-pub fn machine<F>(range: Ipv4Range, task: F) -> RoutablePlug
-where
-    F: Future + Send + 'static,
-    F::Output: Send + 'static,
-{
-    let (a, b) = wire();
-    let addr = range.random_client_addr();
-    let mask = range.netmask_prefix_length();
-    let task = smol::Task::blocking(async move {
-        let join = netsim_embed_machine::machine(addr, mask, b, task);
-        join.join().unwrap();
-    });
-    RoutablePlug {
-        plug: a,
-        addr,
-        mask,
-        router: false,
-        tasks: vec![task],
+#[derive(Debug)]
+pub struct Network<C, E> {
+    range: Ipv4Range,
+    machines: Vec<Machine<C, E>>,
+    networks: Vec<Network<C, E>>,
+}
+
+impl<C: Send + 'static, E: Send + 'static> Network<C, E> {
+    pub fn range(&self) -> Ipv4Range {
+        self.range
+    }
+
+    pub fn subnet(&mut self, i: usize) -> &mut Network<C, E> {
+        self.networks.get_mut(i).unwrap()
+    }
+
+    pub fn machine(&mut self, i: usize) -> &mut Machine<C, E> {
+        self.machines.get_mut(i).unwrap()
     }
 }
 
@@ -88,52 +81,78 @@ impl Default for NatConfig {
     }
 }
 
-pub fn nat(config: NatConfig, range: Ipv4Range, plug: RoutablePlug) -> RoutablePlug {
-    let (a, b) = wire();
-    let public_ip = range.random_client_addr();
-    let private_range = plug.range();
-    let mut nat = Ipv4Nat::new(b, plug.plug, public_ip, private_range);
-    nat.set_hair_pinning(config.hair_pinning);
-    nat.set_symmetric(config.symmetric);
-    nat.set_blacklist_unrecognized_addrs(config.blacklist_unrecognized_addrs);
-    nat.set_restrict_endpoints(config.restrict_endpoints);
-    smol::Task::spawn(nat).detach();
-    RoutablePlug {
-        plug: a,
-        addr: public_ip,
-        mask: 32,
-        router: false,
-        tasks: plug.tasks,
+#[derive(Debug)]
+pub struct NetworkBuilder<C, E> {
+    range: Ipv4Range,
+    router: Ipv4Router,
+    machines: Vec<Machine<C, E>>,
+    networks: Vec<Network<C, E>>,
+}
+
+impl<C: Send + 'static, E: Send + 'static> NetworkBuilder<C, E> {
+    pub fn new(range: Ipv4Range) -> Self {
+        let router = Ipv4Router::new(range.gateway_addr());
+        Self {
+            range,
+            router,
+            machines: Default::default(),
+            networks: Default::default(),
+        }
+    }
+
+    pub fn spawn_machine<B, F>(&mut self, builder: B) -> Ipv4Addr
+    where
+        B: Fn(mpsc::Receiver<C>, mpsc::Sender<E>) -> F + Send + 'static,
+        F: Future<Output = ()> + Send + 'static,
+    {
+        let (iface_a, iface_b) = wire();
+        let (cmd_tx, cmd_rx) = mpsc::channel(0);
+        let (event_tx, event_rx) = mpsc::channel(0);
+        let addr = self.range.random_client_addr();
+        let mask = self.range.netmask_prefix_length();
+        smol::Task::blocking(async move {
+            let join = machine(addr, mask, iface_b, builder(cmd_rx, event_tx));
+            join.join().unwrap();
+        }).detach();
+        let machine = Machine {
+            addr,
+            tx: cmd_tx,
+            rx: event_rx,
+        };
+        self.machines.push(machine);
+        self.router.add_connection(iface_a, vec![addr.into()]);
+        addr
+    }
+
+    pub fn spawn_network(&mut self, config: Option<NatConfig>, mut builder: NetworkBuilder<C, E>) {
+        let (net_a, net_b) = wire();
+        if let Some(config) = config {
+            builder.router.add_connection(net_b, vec![Ipv4Range::global().into()]);
+            let (nat_a, nat_b) = wire();
+            let nat_addr = self.range.random_client_addr();
+            let mut nat = Ipv4Nat::new(nat_b, net_a, nat_addr, builder.range);
+            nat.set_hair_pinning(config.hair_pinning);
+            nat.set_symmetric(config.symmetric);
+            nat.set_blacklist_unrecognized_addrs(config.blacklist_unrecognized_addrs);
+            nat.set_restrict_endpoints(config.restrict_endpoints);
+            smol::Task::spawn(nat).detach();
+            self.router.add_connection(nat_a, vec![nat_addr.into()]);
+        } else {
+            builder.router.add_connection(net_b, vec![self.range.into()]);
+            self.router.add_connection(net_a, vec![builder.range.into()]);
+        }
+        let network = builder.spawn();
+        self.networks.push(network);
+    }
+
+    pub fn spawn(self) -> Network<C, E> {
+        let Self { range, router, machines, networks } = self;
+        smol::Task::spawn(router).detach();
+        Network { range, machines, networks }
     }
 }
 
-pub fn router(range: Ipv4Range, mut plugs: Vec<RoutablePlug>) -> RoutablePlug {
-    if plugs.len() < 2 {
-        return plugs.remove(0);
-    }
-    let (a, b) = wire();
-    let addr = range.gateway_addr();
-    let mask = range.netmask_prefix_length();
-
-    let mut router = Ipv4Router::new(addr);
-    let mut tasks = vec![];
-    for plug in plugs {
-        let route = plug.to_route();
-        router.add_connection(plug.plug, vec![route]);
-        tasks.extend(plug.tasks);
-    }
-    let plug = RoutablePlug {
-        plug: a,
-        addr,
-        mask,
-        router: true,
-        tasks,
-    };
-    router.add_connection(b, vec![plug.to_route()]);
-    smol::Task::spawn(router).detach();
-    plug
-}
-
+/*
 #[derive(Clone, Default)]
 pub struct StarConfig {
     pub nat_config: NatConfig,
@@ -144,32 +163,33 @@ pub struct StarConfig {
 
 pub fn star<B, F>(config: StarConfig, builder: B) -> RoutablePlug
 where
-    B: Fn(u32, u32) -> F,
+    B: Fn(u8, u8) -> F,
     F: Future<Output = ()> + Send + 'static,
 {
     let mut peers = vec![];
-    for _ in 0..config.num_nat {
+    for node in 0..config.num_public {
+        peers.push(machine(Ipv4Range::global(), builder(0, node as _)));
+    }
+    for net in 1..=config.num_nat {
         let mut local_peers = vec![];
         let subnet = Ipv4Range::random_local_subnet();
-        for _ in 0..config.num_private {
-            local_peers.push(machine(subnet, builder()));
+        for node in 0..config.num_private {
+            local_peers.push(machine(subnet, builder(net as _, node as _)));
         }
         let router = router(subnet, local_peers);
         let nat = nat(config.nat_config, Ipv4Range::global(), router);
         peers.push(nat);
-    }
-    for _ in 0..config.num_public {
-        peers.push(machine(Ipv4Range::global(), builder()));
     }
     router(Ipv4Range::global(), peers)
 }
 
 pub fn run_star<B, F>(config: StarConfig, builder: B)
 where
-    B: Fn() -> F,
+    B: Fn(u8, u8) -> F + Send + 'static,
     F: Future<Output = ()> + Send + 'static,
 {
-    run_star(async move {
+    run(async move {
         star(config, builder)
     })
 }
+*/
