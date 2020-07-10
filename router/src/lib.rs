@@ -44,17 +44,17 @@ impl Ipv4Router {
         for (tx, routes) in &self.txs {
             for route in routes {
                 if route.dest().contains(dest) {
-                    log::info!("router {}: routing packet on route {:?}", self.addr, route);
+                    log::debug!("router {}: routing packet on route {:?}", self.addr, route);
                     let _ = tx.unbounded_send(bytes);
                     return;
                 }
             }
-            log::info!(
-                "router {}: dropping unroutable packet to {}",
-                self.addr,
-                dest
-            );
         }
+        log::info!(
+            "router {}: dropping unroutable packet to {}",
+            self.addr,
+            dest
+        );
     }
 }
 

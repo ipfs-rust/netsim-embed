@@ -137,7 +137,7 @@ impl Ipv4Nat {
                         };
                         packet.set_destination(private_dest_addr);
                         log::info!(
-                            "nat {}: rewrote packet destination address: {} => {}",
+                            "nat {}: rewrote outbound packet destination address: {} => {}",
                             self.public_ip,
                             dest_addr,
                             private_dest_addr,
@@ -147,7 +147,7 @@ impl Ipv4Nat {
                     } else {
                         packet.set_source(external_source_addr);
                         log::info!(
-                            "nat {}: rewrote packet source address: {} => {}",
+                            "nat {}: rewrote outbound packet source address: {} => {}",
                             self.public_ip,
                             source_addr,
                             external_source_addr,
@@ -203,12 +203,18 @@ impl Ipv4Nat {
                         );
                         continue;
                     }
+
+                    let map = match packet.protocol() {
+                        Protocol::Udp => &mut self.udp_map,
+                        Protocol::Tcp => &mut self.tcp_map,
+                    };
+
                     if let Some(private_dest_addr) =
-                        self.udp_map.get_inbound_addr(source_addr, dest_addr.port())
+                        map.get_inbound_addr(source_addr, dest_addr.port())
                     {
                         packet.set_destination(private_dest_addr);
                         log::info!(
-                            "nat {}: rewrote destination of inbound packet {} => {}.",
+                            "nat {}: rewrote inbound packet destination address: {} => {}.",
                             self.public_ip,
                             dest_addr,
                             private_dest_addr,
@@ -220,9 +226,15 @@ impl Ipv4Nat {
                             log::info!(
                                 "nat {}: blacklisting unknown address {}.",
                                 self.public_ip,
-                                source_addr
+                                source_addr,
                             );
                             self.blacklisted_addrs.insert(source_addr);
+                        } else {
+                            log::info!(
+                                "nat {}: dropping packet to unknown inbound destination {}.",
+                                self.public_ip,
+                                dest_addr,
+                            );
                         }
                     }
                 }

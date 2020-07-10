@@ -26,7 +26,7 @@ pub fn unshare_network() -> Result<(), io::Error> {
         errno!(libc::unshare(libc::CLONE_NEWNET | libc::CLONE_NEWUTS))?;
         let pid = errno!(libc::getpid())?;
         let tid = errno!(libc::syscall(libc::SYS_gettid))?;
-        log::trace!(
+        log::info!(
             "created network namespace: /proc/{}/task/{}/ns/net",
             pid,
             tid

@@ -1,13 +1,13 @@
+use futures::channel::mpsc;
+use futures::future::Future;
+use futures::sink::SinkExt;
+use futures::stream::StreamExt;
 pub use netsim_embed_core::Ipv4Range;
 use netsim_embed_core::*;
 use netsim_embed_machine::*;
 use netsim_embed_nat::*;
 use netsim_embed_router::*;
 pub use pnet_packet::*;
-use futures::channel::mpsc;
-use futures::future::Future;
-use futures::sink::SinkExt;
-use futures::stream::StreamExt;
 
 use std::net::Ipv4Addr;
 
@@ -113,7 +113,8 @@ impl<C: Send + 'static, E: Send + 'static> NetworkBuilder<C, E> {
         smol::Task::blocking(async move {
             let join = machine(addr, mask, iface_b, builder(cmd_rx, event_tx));
             join.join().unwrap();
-        }).detach();
+        })
+        .detach();
         let machine = Machine {
             addr,
             tx: cmd_tx,
@@ -127,7 +128,9 @@ impl<C: Send + 'static, E: Send + 'static> NetworkBuilder<C, E> {
     pub fn spawn_network(&mut self, config: Option<NatConfig>, mut builder: NetworkBuilder<C, E>) {
         let (net_a, net_b) = wire();
         if let Some(config) = config {
-            builder.router.add_connection(net_b, vec![Ipv4Range::global().into()]);
+            builder
+                .router
+                .add_connection(net_b, vec![Ipv4Range::global().into()]);
             let (nat_a, nat_b) = wire();
             let nat_addr = self.range.random_client_addr();
             let mut nat = Ipv4Nat::new(nat_b, net_a, nat_addr, builder.range);
@@ -138,17 +141,29 @@ impl<C: Send + 'static, E: Send + 'static> NetworkBuilder<C, E> {
             smol::Task::spawn(nat).detach();
             self.router.add_connection(nat_a, vec![nat_addr.into()]);
         } else {
-            builder.router.add_connection(net_b, vec![self.range.into()]);
-            self.router.add_connection(net_a, vec![builder.range.into()]);
+            builder
+                .router
+                .add_connection(net_b, vec![self.range.into()]);
+            self.router
+                .add_connection(net_a, vec![builder.range.into()]);
         }
         let network = builder.spawn();
         self.networks.push(network);
     }
 
     pub fn spawn(self) -> Network<C, E> {
-        let Self { range, router, machines, networks } = self;
+        let Self {
+            range,
+            router,
+            machines,
+            networks,
+        } = self;
         smol::Task::spawn(router).detach();
-        Network { range, machines, networks }
+        Network {
+            range,
+            machines,
+            networks,
+        }
     }
 }
 

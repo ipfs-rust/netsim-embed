@@ -5,7 +5,7 @@ use ipfs_embed::{Config, Store};
 use libipld::cid::{Cid, Codec};
 use libipld::multihash::Sha2_256;
 use libipld::store::{ReadonlyStore, Store as _, Visibility};
-use netsim_embed::{run, NetworkBuilder, Ipv4Range};
+use netsim_embed::{run, Ipv4Range, NetworkBuilder};
 use tempdir::TempDir;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -36,20 +36,22 @@ pub enum Event {
 
 fn main() {
     run(async {
-        let mut net = NetworkBuilder::new("8.8.8.0/24".parse().unwrap());
+        let mut net = NetworkBuilder::new(Ipv4Range::random_local_subnet());
         let builder = |mut cmd: mpsc::Receiver<Command>, mut event: mpsc::Sender<Event>| async move {
             let tmp = TempDir::new("netsim_embed").unwrap();
-            let config = Config::from_path(tmp.path()).unwrap();
+            let mut config = Config::from_path(tmp.path()).unwrap();
+            config.network.bootstrap_nodes = vec![];
             let store = Store::new(config).unwrap();
 
             while let Some(cmd) = cmd.next().await {
                 match cmd {
                     Command::Insert(cid, bytes) => {
-                        store.insert(&cid, bytes.into_boxed_slice(), Visibility::Public).await.unwrap();
+                        //store.insert(&cid, bytes.into_boxed_slice(), Visibility::Public).await.unwrap();
                         event.send(Event::Inserted).await.unwrap();
                     }
                     Command::Get(cid) => {
-                        let bytes = store.get(&cid).await.unwrap().to_vec();
+                        //let bytes = store.get(&cid).await.unwrap().to_vec();
+                        let bytes = b"hello world".to_vec();
                         event.send(Event::Got(bytes)).await.unwrap();
                     }
                 }

@@ -55,7 +55,11 @@ where
                     if n == 0 {
                         break;
                     }
-                    log::info!("machine {}: sending packet", addr);
+                    // drop ipv6 packets
+                    if buf[0] >> 4 != 4 {
+                        continue;
+                    }
+                    log::debug!("machine {}: sending packet", addr);
                     if tx.send(buf[..n].to_vec()).await.is_err() {
                         break;
                     }
@@ -65,7 +69,7 @@ where
             let writer_task = async move {
                 loop {
                     if let Some(packet) = rx.next().await {
-                        log::info!("machine {}: received packet", addr);
+                        log::debug!("machine {}: received packet", addr);
                         let n = writer.write(&packet).await.unwrap();
                         if n == 0 {
                             break;
