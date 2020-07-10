@@ -21,3 +21,6 @@ futures = "0.3.5"
 ipfs-embed = "0.1.1"
 libipld = { version = "0.3.0", default-features = false }
 tempdir = "0.3.7"
+
+[patch.crates-io]
+ipfs-embed = { git = "https://github.com/ipfs-rust/ipfs-embed" }

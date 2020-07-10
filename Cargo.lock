@@ -891,8 +891,7 @@ dependencies = [
 [[package]]
 name = "ipfs-embed"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30534896ddfc78f4eb13739d50cd899823b7744d19ae535ba42848d60752972c"
+source = "git+https://github.com/ipfs-rust/ipfs-embed#b12ba1c4efee985eb2b08c103909684b6d9e64b0"
 dependencies = [
  "async-std",
  "libipld",
