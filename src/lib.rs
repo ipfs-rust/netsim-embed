@@ -143,7 +143,7 @@ impl<C: Send + 'static, E: Send + 'static> NetworkBuilder<C, E> {
         } else {
             builder
                 .router
-                .add_connection(net_b, vec![self.range.into()]);
+                .add_connection(net_b, vec![Ipv4Range::global().into()]);
             self.router
                 .add_connection(net_a, vec![builder.range.into()]);
         }
@@ -166,45 +166,3 @@ impl<C: Send + 'static, E: Send + 'static> NetworkBuilder<C, E> {
         }
     }
 }
-
-/*
-#[derive(Clone, Default)]
-pub struct StarConfig {
-    pub nat_config: NatConfig,
-    pub num_public: u8,
-    pub num_nat: u8,
-    pub num_private: u8,
-}
-
-pub fn star<B, F>(config: StarConfig, builder: B) -> RoutablePlug
-where
-    B: Fn(u8, u8) -> F,
-    F: Future<Output = ()> + Send + 'static,
-{
-    let mut peers = vec![];
-    for node in 0..config.num_public {
-        peers.push(machine(Ipv4Range::global(), builder(0, node as _)));
-    }
-    for net in 1..=config.num_nat {
-        let mut local_peers = vec![];
-        let subnet = Ipv4Range::random_local_subnet();
-        for node in 0..config.num_private {
-            local_peers.push(machine(subnet, builder(net as _, node as _)));
-        }
-        let router = router(subnet, local_peers);
-        let nat = nat(config.nat_config, Ipv4Range::global(), router);
-        peers.push(nat);
-    }
-    router(Ipv4Range::global(), peers)
-}
-
-pub fn run_star<B, F>(config: StarConfig, builder: B)
-where
-    B: Fn(u8, u8) -> F + Send + 'static,
-    F: Future<Output = ()> + Send + 'static,
-{
-    run(async move {
-        star(config, builder)
-    })
-}
-*/

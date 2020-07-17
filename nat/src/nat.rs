@@ -136,7 +136,7 @@ impl Ipv4Nat {
                             continue;
                         };
                         packet.set_destination(private_dest_addr);
-                        log::info!(
+                        log::trace!(
                             "nat {}: rewrote outbound packet destination address: {} => {}",
                             self.public_ip,
                             dest_addr,
@@ -146,7 +146,7 @@ impl Ipv4Nat {
                         let _ = self.private_plug.unbounded_send(bytes);
                     } else {
                         packet.set_source(external_source_addr);
-                        log::info!(
+                        log::trace!(
                             "nat {}: rewrote outbound packet source address: {} => {}",
                             self.public_ip,
                             source_addr,
@@ -213,7 +213,7 @@ impl Ipv4Nat {
                         map.get_inbound_addr(source_addr, dest_addr.port())
                     {
                         packet.set_destination(private_dest_addr);
-                        log::info!(
+                        log::trace!(
                             "nat {}: rewrote inbound packet destination address: {} => {}.",
                             self.public_ip,
                             dest_addr,
@@ -235,6 +235,7 @@ impl Ipv4Nat {
                                 self.public_ip,
                                 dest_addr,
                             );
+                            log::info!("{:?}", map);
                         }
                     }
                 }

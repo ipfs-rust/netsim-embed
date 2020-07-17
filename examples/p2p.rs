@@ -5,7 +5,7 @@ use ipfs_embed::{Config, Store, Multiaddr, PeerId};
 use libipld::cid::{Cid, Codec};
 use libipld::multihash::Sha2_256;
 use libipld::store::{ReadonlyStore, Store as _, Visibility};
-use netsim_embed::{run, Ipv4Range, NetworkBuilder};
+use netsim_embed::{run, Ipv4Range, NatConfig, NetworkBuilder};
 use tempdir::TempDir;
 use std::time::Duration;
 
@@ -39,8 +39,7 @@ pub enum Event {
 
 fn main() {
     run(async {
-        let mut net = NetworkBuilder::new(Ipv4Range::random_local_subnet());
-        let builder = |mut cmd: mpsc::Receiver<Command>, mut event: mpsc::Sender<Event>| async move {
+        let builder = |node_name: &'static str| move |mut cmd: mpsc::Receiver<Command>, mut event: mpsc::Sender<Event>| async move {
             let tmp = TempDir::new("netsim_embed").unwrap();
             let mut config = Config::from_path(tmp.path()).unwrap();
             let bootstrap = if let Command::Bootstrap(bootstrap) = cmd.next().await.unwrap() {
@@ -48,7 +47,9 @@ fn main() {
             } else {
                 unreachable!()
             };
-            config.network.bootstrap_nodes = bootstrap;
+            config.network.node_name = node_name.to_string();
+            config.network.boot_nodes = bootstrap;
+            config.network.enable_mdns = false;
             let store = Store::new(config).unwrap();
             let address = store.address().clone();
             let peer_id = store.peer_id().clone();
@@ -69,8 +70,22 @@ fn main() {
             }
         };
 
-        net.spawn_machine(builder.clone());
-        net.spawn_machine(builder);
+        //let ranges = Ipv4Range::global().split(3);
+        let mut local1 = NetworkBuilder::new(/*ranges[0]*/ Ipv4Range::random_local_subnet());
+        local1.spawn_machine(builder("local1"));
+
+        let mut local2 = NetworkBuilder::new(/*ranges[1]*/ Ipv4Range::random_local_subnet());
+        local2.spawn_machine(builder("local2"));
+
+        let natconfig = NatConfig::default();
+        //natconfig.hair_pinning = true;
+        //natconfig.symmetric = true;
+        let mut net = NetworkBuilder::new(Ipv4Range::global());
+        net.spawn_machine(builder("boot"));
+        net.spawn_network(Some(natconfig), local1);
+        net.spawn_network(Some(natconfig), local2);
+        //net.spawn_machine(builder("local2"));
+
         let mut net = net.spawn();
         let mut bootstrap = vec![];
 
@@ -82,14 +97,28 @@ fn main() {
             unreachable!()
         }
 
-        m.send(Command::insert(b"hello world")).await;
-        assert_eq!(m.recv().await.unwrap(), Event::Inserted);
-        // wait for bootstrap node to start up.
+        // wait for bootstrap node to start up (run in release mode).
         smol::Timer::after(Duration::from_millis(500)).await;
 
-        let m = net.machine(1);
+        let m = net.subnet(0).machine(0);
+        m.send(Command::Bootstrap(bootstrap.clone())).await;
+        m.recv().await.unwrap();
+
+        // wait for bootstrap to complete (run in release mode).
+        smol::Timer::after(Duration::from_millis(500)).await;
+
+        m.send(Command::insert(b"hello world")).await;
+        assert_eq!(m.recv().await.unwrap(), Event::Inserted);
+
+        smol::Timer::after(Duration::from_millis(500)).await;
+
+        let m = net.subnet(1).machine(0);
         m.send(Command::Bootstrap(bootstrap)).await;
         m.recv().await.unwrap();
+
+        // wait for bootstrap to complete (run in release mode).
+        smol::Timer::after(Duration::from_millis(500)).await;
+
         m.send(Command::get(b"hello world")).await;
         assert_eq!(m.recv().await.unwrap(), Event::Got(b"hello world".to_vec()));
     })
