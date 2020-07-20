@@ -3,6 +3,9 @@ name = "netsim-embed-machine"
 version = "0.1.0"
 authors = ["David Craven <david@craven.ch>"]
 edition = "2018"
+description = "Runs a future in a separate network namespace with a TUN adapter."
+license = "MIT"
+repository = "https://github.com/ipfs-rust/netsim-embed"
 
 [features]
 tokio2 = ["mio", "tokio"]
@@ -13,6 +16,6 @@ ioctl-sys = "0.5.2"
 libc = "0.2.72"
 log = "0.4.11"
 mio = { version = "0.7.0", optional = true }
-netsim-embed-core = { path = "../core" }
+netsim-embed-core = { version = "0.1.0", path = "../core" }
 smol = "0.1.18"
 tokio = { version = "0.2.21", features = ["io-driver", "rt-threaded"], optional = true }

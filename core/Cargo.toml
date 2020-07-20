@@ -3,6 +3,9 @@ name = "netsim-embed-core"
 version = "0.1.0"
 authors = ["David Craven <david@craven.ch>"]
 edition = "2018"
+description = "Core types for netsim embed."
+license = "MIT"
+repository = "https://github.com/ipfs-rust/netsim-embed"
 
 [dependencies]
 futures = "0.3.5"

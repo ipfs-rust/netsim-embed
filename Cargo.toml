@@ -6,13 +6,16 @@ name = "netsim-embed"
 version = "0.1.0"
 authors = ["David Craven <david@craven.ch>"]
 edition = "2018"
+description = "Network simulator."
+license = "MIT"
+repository = "https://github.com/ipfs-rust/netsim-embed"
 
 [dependencies]
 env_logger = "0.7.1"
-netsim-embed-core = { path = "core" }
-netsim-embed-machine = { path = "machine" }
-netsim-embed-nat = { path = "nat" }
-netsim-embed-router = { path = "router" }
+netsim-embed-core = { version = "0.1.0", path = "core" }
+netsim-embed-machine = { version = "0.1.0", path = "machine" }
+netsim-embed-nat = { version = "0.1.0", path = "nat" }
+netsim-embed-router = { version = "0.1.0", path = "router" }
 pnet_packet = "0.26.0"
 smol = "0.1.18"
 futures = "0.3.5"
