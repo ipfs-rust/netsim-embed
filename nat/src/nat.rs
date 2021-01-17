@@ -221,22 +221,20 @@ impl Ipv4Nat {
                         );
                         packet.set_checksum();
                         let _ = self.private_plug.unbounded_send(bytes);
+                    } else if self.blacklist_unrecognized_addrs {
+                        log::info!(
+                            "nat {}: blacklisting unknown address {}.",
+                            self.public_ip,
+                            source_addr,
+                        );
+                        self.blacklisted_addrs.insert(source_addr);
                     } else {
-                        if self.blacklist_unrecognized_addrs {
-                            log::info!(
-                                "nat {}: blacklisting unknown address {}.",
-                                self.public_ip,
-                                source_addr,
-                            );
-                            self.blacklisted_addrs.insert(source_addr);
-                        } else {
-                            log::info!(
-                                "nat {}: dropping packet to unknown inbound destination {}.",
-                                self.public_ip,
-                                dest_addr,
-                            );
-                            log::info!("{:?}", map);
-                        }
+                        log::info!(
+                            "nat {}: dropping packet to unknown inbound destination {}.",
+                            self.public_ip,
+                            dest_addr,
+                        );
+                        log::info!("{:?}", map);
                     }
                 }
             }

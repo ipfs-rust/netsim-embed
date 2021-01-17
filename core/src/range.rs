@@ -200,10 +200,9 @@ impl FromStr for Ipv4Range {
             Some(bits) => bits,
             None => return Err(IpRangeParseError::MissingDelimiter),
         };
-        match split.next() {
-            Some(..) => return Err(IpRangeParseError::ExtraDelimiter),
-            None => (),
-        };
+        if split.next().is_some() {
+            return Err(IpRangeParseError::ExtraDelimiter);
+        }
         let addr = match Ipv4Addr::from_str(addr) {
             Ok(addr) => addr,
             Err(e) => return Err(IpRangeParseError::ParseAddr(e)),

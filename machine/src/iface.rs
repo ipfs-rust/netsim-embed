@@ -265,7 +265,7 @@ impl Iface {
 
             rtentry.rt_dev = self.name.as_ptr() as *mut _;
 
-            if let Err(err) = errno!(libc::ioctl(fd, u64::from(libc::SIOCADDRT), &rtentry)) {
+            if let Err(err) = errno!(libc::ioctl(fd, libc::SIOCADDRT, &rtentry)) {
                 let _ = libc::close(fd);
                 return Err(err).unwrap();
             }

@@ -9,14 +9,14 @@ pub fn unshare_user() -> Result<(), io::Error> {
 
     let mut f = File::create("/proc/self/uid_map")?;
     let s = format!("0 {} 1\n", uid);
-    f.write(s.as_bytes())?;
+    f.write_all(s.as_bytes())?;
 
     let mut f = File::create("/proc/self/setgroups")?;
-    f.write(b"deny\n")?;
+    f.write_all(b"deny\n")?;
 
     let mut f = File::create("/proc/self/gid_map")?;
     let s = format!("0 {} 1\n", gid);
-    f.write(s.as_bytes())?;
+    f.write_all(s.as_bytes())?;
 
     Ok(())
 }

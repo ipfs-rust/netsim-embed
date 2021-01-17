@@ -19,22 +19,14 @@ pub struct Packet<'a> {
 
 impl<'a> Packet<'a> {
     pub fn new(bytes: &'a mut [u8]) -> Option<Self> {
-        let packet = if let Some(packet) = Ipv4Packet::new(bytes) {
-            packet
-        } else {
-            return None;
-        };
+        let packet = Ipv4Packet::new(bytes)?;
         let protocol = match packet.get_next_level_protocol() {
             IpNextHeaderProtocols::Udp => {
-                if UdpPacket::new(packet.payload()).is_none() {
-                    return None;
-                }
+                UdpPacket::new(packet.payload())?;
                 Protocol::Udp
             }
             IpNextHeaderProtocols::Tcp => {
-                if TcpPacket::new(packet.payload()).is_none() {
-                    return None;
-                }
+                TcpPacket::new(packet.payload())?;
                 Protocol::Tcp
             }
             _ => return None,
@@ -49,7 +41,7 @@ impl<'a> Packet<'a> {
             Protocol::Udp => UdpPacket::new(packet.payload()).unwrap().get_source(),
             Protocol::Tcp => TcpPacket::new(packet.payload()).unwrap().get_source(),
         };
-        SocketAddrV4::new(ip, port.into())
+        SocketAddrV4::new(ip, port)
     }
 
     pub fn get_destination(&self) -> SocketAddrV4 {
@@ -59,7 +51,7 @@ impl<'a> Packet<'a> {
             Protocol::Udp => UdpPacket::new(packet.payload()).unwrap().get_destination(),
             Protocol::Tcp => TcpPacket::new(packet.payload()).unwrap().get_destination(),
         };
-        SocketAddrV4::new(ip, port.into())
+        SocketAddrV4::new(ip, port)
     }
 
     pub fn get_ttl(&self) -> u8 {
@@ -76,11 +68,11 @@ impl<'a> Packet<'a> {
         match self.protocol {
             Protocol::Udp => {
                 let mut udp = MutableUdpPacket::new(packet.payload_mut()).unwrap();
-                udp.set_source(addr.port().into());
+                udp.set_source(addr.port());
             }
             Protocol::Tcp => {
                 let mut tcp = MutableTcpPacket::new(packet.payload_mut()).unwrap();
-                tcp.set_source(addr.port().into());
+                tcp.set_source(addr.port());
             }
         }
     }
@@ -91,11 +83,11 @@ impl<'a> Packet<'a> {
         match self.protocol {
             Protocol::Udp => {
                 let mut udp = MutableUdpPacket::new(packet.payload_mut()).unwrap();
-                udp.set_destination(addr.port().into());
+                udp.set_destination(addr.port());
             }
             Protocol::Tcp => {
                 let mut tcp = MutableTcpPacket::new(packet.payload_mut()).unwrap();
-                tcp.set_destination(addr.port().into());
+                tcp.set_destination(addr.port());
             }
         }
     }

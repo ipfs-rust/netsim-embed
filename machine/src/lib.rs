@@ -67,14 +67,10 @@ where
             };
 
             let writer_task = async move {
-                loop {
-                    if let Some(packet) = rx.next().await {
-                        log::debug!("machine {}: received packet", addr);
-                        let n = writer.write(&packet).await.unwrap();
-                        if n == 0 {
-                            break;
-                        }
-                    } else {
+                while let Some(packet) = rx.next().await {
+                    log::debug!("machine {}: received packet", addr);
+                    let n = writer.write(&packet).await.unwrap();
+                    if n == 0 {
                         break;
                     }
                 }
