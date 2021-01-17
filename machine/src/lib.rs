@@ -13,8 +13,8 @@ macro_rules! errno {
 
 pub mod iface;
 pub mod namespace;
-#[cfg(feature = "tokio2")]
-pub mod tokio;
+//#[cfg(feature = "tokio2")]
+//pub mod tokio;
 
 use futures::future::Future;
 use futures::io::{AsyncReadExt, AsyncWriteExt};

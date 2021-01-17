@@ -11,20 +11,16 @@ license = "MIT"
 repository = "https://github.com/ipfs-rust/netsim-embed"
 
 [dependencies]
-env_logger = "0.7.1"
+env_logger = "0.8.2"
 netsim-embed-core = { version = "0.1.0", path = "core" }
 netsim-embed-machine = { version = "0.1.0", path = "machine" }
 netsim-embed-nat = { version = "0.1.0", path = "nat" }
 netsim-embed-router = { version = "0.1.0", path = "router" }
-pnet_packet = "0.26.0"
-smol = "0.1.18"
-futures = "0.3.5"
+pnet_packet = "0.27.2"
+smol = "1.2.5"
+futures = "0.3.12"
 
 [dev-dependencies]
-ipfs-embed = "0.2.0"
-libipld = { version = "0.3.0", default-features = false }
+ipfs-embed = "0.10.0"
+libipld = { version = "0.9.0", default-features = false }
 tempdir = "0.3.7"
-
-[patch.crates-io]
-libp2p = { path = "../rust-libp2p" }
-ipfs-embed = { path = "../ipfs-embed" }

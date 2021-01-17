@@ -8,8 +8,8 @@ license = "MIT"
 repository = "https://github.com/ipfs-rust/netsim-embed"
 
 [dependencies]
-futures = "0.3.5"
-log = "0.4.11"
+futures = "0.3.12"
+log = "0.4.13"
 netsim-embed-core = { version = "0.1.0", path = "../core" }
-pnet_packet = "0.26.0"
-rand = "0.7.3"
+pnet_packet = "0.27.2"
+rand = "0.8.2"
