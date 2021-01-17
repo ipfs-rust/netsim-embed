@@ -84,10 +84,10 @@ where
         };
 
         #[cfg(not(feature = "tokio2"))]
-        let result = smol::run(async move {
+        let result = smol::block_on(async move {
             let (reader_task, writer_task) = create_tun_iface();
-            smol::Task::spawn(reader_task).detach();
-            smol::Task::spawn(writer_task).detach();
+            smol::spawn(reader_task).detach();
+            smol::spawn(writer_task).detach();
             task.await
         });
         #[cfg(feature = "tokio2")]

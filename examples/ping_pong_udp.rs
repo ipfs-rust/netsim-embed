@@ -7,7 +7,8 @@ fn main() {
     run(async {
         let mut net = NetworkBuilder::new(Ipv4Range::global());
         let addr = net.spawn_machine(|_: mpsc::Receiver<()>, _: mpsc::Sender<()>| async move {
-            let socket = smol::Async::<UdpSocket>::bind("0.0.0.0:3000").unwrap();
+            let addr = SocketAddrV4::new(0.into(), 3000);
+            let socket = smol::Async::<UdpSocket>::bind(addr).unwrap();
             loop {
                 let mut buf = [0u8; 11];
                 let (len, addr) = socket.recv_from(&mut buf).await.unwrap();
@@ -23,7 +24,8 @@ fn main() {
         let mut local = NetworkBuilder::new(Ipv4Range::random_local_subnet());
         local.spawn_machine(
             move |_: mpsc::Receiver<()>, mut events: mpsc::Sender<()>| async move {
-                let socket = smol::Async::<UdpSocket>::bind("0.0.0.0:0").unwrap();
+                let laddr = SocketAddrV4::new(0.into(), 3000);
+                let socket = smol::Async::<UdpSocket>::bind(laddr).unwrap();
                 socket
                     .send_to(b"ping", SocketAddrV4::new(addr, 3000))
                     .await
