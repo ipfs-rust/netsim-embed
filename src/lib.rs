@@ -102,7 +102,7 @@ impl<C: Send + 'static, E: Send + 'static> NetworkBuilder<C, E> {
 
     pub fn spawn_machine<B, F>(&mut self, builder: B) -> Ipv4Addr
     where
-        B: Fn(mpsc::Receiver<C>, mpsc::Sender<E>) -> F + Send + 'static,
+        B: FnOnce(mpsc::Receiver<C>, mpsc::Sender<E>) -> F + Send + 'static,
         F: Future<Output = ()> + Send + 'static,
     {
         let (iface_a, iface_b) = wire();
