@@ -1,71 +1,83 @@
 use futures::channel::mpsc;
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
-use ipfs_embed::{Config, Store, Multiaddr, PeerId};
-use libipld::cid::{Cid, Codec};
-use libipld::multihash::Sha2_256;
-use libipld::store::{ReadonlyStore, Store as _, Visibility};
+use ipfs_embed::{Config, Ipfs, Multiaddr, PeerId};
+use libipld::multihash::{Code, MultihashDigest};
+use libipld::raw::RawCodec;
+use libipld::store::DefaultParams;
+use libipld::{Block, Cid};
 use netsim_embed::{run, Ipv4Range, NatConfig, NetworkBuilder};
-use tempdir::TempDir;
 use std::time::Duration;
+use tempdir::TempDir;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Command {
-    Bootstrap(Vec<(Multiaddr, PeerId)>),
+    Bootstrap(Vec<(PeerId, Multiaddr)>),
     Insert(Cid, Vec<u8>),
     Get(Cid),
 }
 
 impl Command {
     pub fn insert(bytes: &[u8]) -> Self {
-        let hash = Sha2_256::digest(&bytes);
-        let cid = Cid::new_v1(Codec::Raw, hash);
+        let hash = Code::Blake3_256.digest(&bytes);
+        let cid = Cid::new_v1(RawCodec.into(), hash);
         Self::Insert(cid, bytes.to_vec())
     }
 
     pub fn get(bytes: &[u8]) -> Self {
-        let hash = Sha2_256::digest(&bytes);
-        let cid = Cid::new_v1(Codec::Raw, hash);
+        let hash = Code::Blake3_256.digest(&bytes);
+        let cid = Cid::new_v1(RawCodec.into(), hash);
         Self::Get(cid)
     }
 }
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Event {
-    Bootstrapped(Multiaddr, PeerId),
+    Bootstrapped(PeerId, Multiaddr),
     Inserted,
     Got(Vec<u8>),
 }
 
 fn main() {
     run(async {
-        let builder = |node_name: &'static str| move |mut cmd: mpsc::Receiver<Command>, mut event: mpsc::Sender<Event>| async move {
-            let tmp = TempDir::new("netsim_embed").unwrap();
-            let mut config = Config::from_path(tmp.path()).unwrap();
-            let bootstrap = if let Command::Bootstrap(bootstrap) = cmd.next().await.unwrap() {
-                bootstrap
-            } else {
-                unreachable!()
-            };
-            config.network.node_name = node_name.to_string();
-            config.network.boot_nodes = bootstrap;
-            config.network.enable_mdns = false;
-            let store = Store::new(config).unwrap();
-            let address = store.address().clone();
-            let peer_id = store.peer_id().clone();
-            event.send(Event::Bootstrapped(address, peer_id)).await.unwrap();
+        let builder = |node_name: &'static str| {
+            move |mut cmd: mpsc::Receiver<Command>, mut event: mpsc::Sender<Event>| async move {
+                let tmp = TempDir::new("netsim_embed").unwrap();
+                let mut config = Config::new(None, 0);
+                config.network.node_name = node_name.to_string();
+                config.network.enable_mdns = false;
+                let store = Ipfs::<DefaultParams>::new(config).await.unwrap();
+                /*let address = store
+                .listen_on("/ip4/0.0.0.0/tcp/0".parse().unwrap())
+                .await
+                .unwrap();*/
+                let address: Multiaddr = Multiaddr::empty();
+                let peer_id = store.local_peer_id().clone();
 
-            while let Some(cmd) = cmd.next().await {
-                match cmd {
-                    Command::Insert(cid, bytes) => {
-                        store.insert(&cid, bytes.into_boxed_slice(), Visibility::Public).await.unwrap();
-                        event.send(Event::Inserted).await.unwrap();
+                while let Some(cmd) = cmd.next().await {
+                    match cmd {
+                        Command::Bootstrap(peers) => {
+                            if !peers.is_empty() {
+                                store.bootstrap(&peers).await.unwrap();
+                            }
+                            event
+                                .send(Event::Bootstrapped(peer_id, address.clone()))
+                                .await
+                                .unwrap();
+                        }
+                        Command::Insert(cid, bytes) => {
+                            store
+                                .insert(&Block::new_unchecked(cid, bytes))
+                                .unwrap()
+                                .await
+                                .unwrap();
+                            event.send(Event::Inserted).await.unwrap();
+                        }
+                        Command::Get(cid) => {
+                            let bytes = store.fetch(&cid).await.unwrap().into_inner().1;
+                            event.send(Event::Got(bytes)).await.unwrap();
+                        }
                     }
-                    Command::Get(cid) => {
-                        let bytes = store.get(&cid).await.unwrap().to_vec();
-                        event.send(Event::Got(bytes)).await.unwrap();
-                    }
-                    _ => unreachable!(),
                 }
             }
         };
@@ -91,8 +103,8 @@ fn main() {
 
         let m = net.machine(0);
         m.send(Command::Bootstrap(vec![])).await;
-        if let Event::Bootstrapped(addr, peer_id) = m.recv().await.unwrap() {
-            bootstrap.push((addr, peer_id));
+        if let Event::Bootstrapped(peer_id, addr) = m.recv().await.unwrap() {
+            bootstrap.push((peer_id, addr));
         } else {
             unreachable!()
         }
