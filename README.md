@@ -1,6 +1,9 @@
 # netsim-embed
 A small embeddable network simulator based on the currently unmaintained [netsim][netsim].
 
+If you get a no such device error make sure that the tun kernel module is loaded (`insmod tun`) and
+that the tun device file exists (`/dev/net/tun`).
+
 Run the example:
 
 ```sh
