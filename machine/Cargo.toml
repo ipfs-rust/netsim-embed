@@ -7,15 +7,11 @@ description = "Runs a future in a separate network namespace with a TUN adapter.
 license = "MIT"
 repository = "https://github.com/ipfs-rust/netsim-embed"
 
-#[features]
-#tokio2 = ["mio", "tokio"]
-
 [dependencies]
+async-global-executor = "2.0.2"
+async-io = "1.3.1"
 futures = "0.3.13"
 ioctl-sys = "0.7.1"
 libc = "0.2.90"
 log = "0.4.14"
-#mio = { version = "0.7.7", optional = true }
 netsim-embed-core = { version = "0.1.1", path = "../core" }
-smol = "1.2.5"
-#tokio = { version = "1.0.2", features = ["io-driver", "rt-threaded"], optional = true }

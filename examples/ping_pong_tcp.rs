@@ -10,7 +10,7 @@ fn main() {
         let mut net = NetworkBuilder::new(Ipv4Range::global());
         let addr = net.spawn_machine(|_: mpsc::Receiver<()>, _: mpsc::Sender<()>| async move {
             let addr = SocketAddrV4::new(0.into(), 3000);
-            let listener = smol::Async::<TcpListener>::bind(addr).unwrap();
+            let listener = async_io::Async::<TcpListener>::bind(addr).unwrap();
             let incoming = listener.incoming();
             futures::pin_mut!(incoming);
             let mut stream = incoming.next().await.unwrap().unwrap();
@@ -27,7 +27,7 @@ fn main() {
         local.spawn_machine(
             move |_: mpsc::Receiver<()>, mut events: mpsc::Sender<()>| async move {
                 let addr = SocketAddrV4::new(addr, 3000);
-                let mut stream = smol::Async::<TcpStream>::connect(addr).await.unwrap();
+                let mut stream = async_io::Async::<TcpStream>::connect(addr).await.unwrap();
                 stream.write_all(b"ping").await.unwrap();
 
                 let mut buf = [0u8; 11];

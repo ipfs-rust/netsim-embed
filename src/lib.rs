@@ -17,7 +17,7 @@ where
 {
     env_logger::init();
     namespace::unshare_user().unwrap();
-    smol::block_on(f);
+    async_global_executor::block_on(f);
 }
 
 #[derive(Debug)]
@@ -110,7 +110,7 @@ impl<C: Send + 'static, E: Send + 'static> NetworkBuilder<C, E> {
         let (event_tx, event_rx) = mpsc::channel(0);
         let addr = self.range.random_client_addr();
         let mask = self.range.netmask_prefix_length();
-        smol::spawn(smol::unblock(move || {
+        async_global_executor::spawn(async_global_executor::spawn_blocking(move || {
             let join = machine(addr, mask, iface_b, builder(cmd_rx, event_tx));
             join.join().unwrap();
         }))
@@ -138,7 +138,7 @@ impl<C: Send + 'static, E: Send + 'static> NetworkBuilder<C, E> {
             nat.set_symmetric(config.symmetric);
             nat.set_blacklist_unrecognized_addrs(config.blacklist_unrecognized_addrs);
             nat.set_restrict_endpoints(config.restrict_endpoints);
-            smol::spawn(nat).detach();
+            async_global_executor::spawn(nat).detach();
             self.router.add_connection(nat_a, vec![nat_addr.into()]);
         } else {
             builder
@@ -158,7 +158,7 @@ impl<C: Send + 'static, E: Send + 'static> NetworkBuilder<C, E> {
             machines,
             networks,
         } = self;
-        smol::spawn(router).detach();
+        async_global_executor::spawn(router).detach();
         Network {
             range,
             machines,

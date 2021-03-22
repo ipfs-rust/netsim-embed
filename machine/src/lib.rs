@@ -13,8 +13,6 @@ macro_rules! errno {
 
 pub mod iface;
 pub mod namespace;
-//#[cfg(feature = "tokio2")]
-//pub mod tokio;
 
 use futures::future::Future;
 use futures::io::{AsyncReadExt, AsyncWriteExt};
@@ -40,10 +38,7 @@ where
             iface.put_up().unwrap();
             iface.add_ipv4_route(Ipv4Range::global().into()).unwrap();
 
-            #[cfg(not(feature = "tokio2"))]
-            let iface = smol::Async::new(iface).unwrap();
-            #[cfg(feature = "tokio2")]
-            let iface = tokio::TokioFd::new(iface).unwrap();
+            let iface = async_io::Async::new(iface).unwrap();
 
             let (mut tx, mut rx) = plug.split();
             let (mut reader, mut writer) = iface.split();
@@ -79,27 +74,12 @@ where
             (reader_task, writer_task)
         };
 
-        #[cfg(not(feature = "tokio2"))]
-        let result = smol::block_on(async move {
+        let result = async_global_executor::block_on(async move {
             let (reader_task, writer_task) = create_tun_iface();
-            smol::spawn(reader_task).detach();
-            smol::spawn(writer_task).detach();
+            async_global_executor::spawn(reader_task).detach();
+            async_global_executor::spawn(writer_task).detach();
             task.await
         });
-        #[cfg(feature = "tokio2")]
-        let result = {
-            let mut rt = ::tokio::runtime::Builder::new()
-                .threaded_scheduler()
-                .enable_all()
-                .build()
-                .unwrap();
-            rt.block_on(async move {
-                let (reader_task, writer_task) = create_tun_iface();
-                ::tokio::task::spawn(reader_task);
-                ::tokio::task::spawn(writer_task);
-                task.await
-            })
-        };
 
         result
     })
