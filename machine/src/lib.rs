@@ -74,13 +74,11 @@ where
             (reader_task, writer_task)
         };
 
-        let result = async_global_executor::block_on(async move {
+        async_global_executor::block_on(async move {
             let (reader_task, writer_task) = create_tun_iface();
             async_global_executor::spawn(reader_task).detach();
             async_global_executor::spawn(writer_task).detach();
             task.await
-        });
-
-        result
+        })
     })
 }

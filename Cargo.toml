@@ -3,7 +3,7 @@ members = ["core", "machine", "nat", "router", "."]
 
 [package]
 name = "netsim-embed"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["David Craven <david@craven.ch>"]
 edition = "2018"
 description = "Network simulator."
@@ -14,10 +14,10 @@ repository = "https://github.com/ipfs-rust/netsim-embed"
 async-global-executor = "2.0.2"
 env_logger = "0.8.3"
 futures = "0.3.13"
-netsim-embed-core = { version = "0.1.0", path = "core" }
-netsim-embed-machine = { version = "0.1.0", path = "machine" }
-netsim-embed-nat = { version = "0.1.0", path = "nat" }
-netsim-embed-router = { version = "0.1.0", path = "router" }
+netsim-embed-core = { version = "0.2.0", path = "core" }
+netsim-embed-machine = { version = "0.2.0", path = "machine" }
+netsim-embed-nat = { version = "0.2.0", path = "nat" }
+netsim-embed-router = { version = "0.2.0", path = "router" }
 pnet_packet = "0.27.2"
 
 [dev-dependencies]

@@ -1,6 +1,6 @@
 [package]
 name = "netsim-embed-machine"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["David Craven <david@craven.ch>"]
 edition = "2018"
 description = "Runs a future in a separate network namespace with a TUN adapter."
@@ -14,4 +14,4 @@ futures = "0.3.13"
 ioctl-sys = "0.7.1"
 libc = "0.2.90"
 log = "0.4.14"
-netsim-embed-core = { version = "0.1.1", path = "../core" }
+netsim-embed-core = { version = "0.2.0", path = "../core" }
