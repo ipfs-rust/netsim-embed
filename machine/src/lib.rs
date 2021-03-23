@@ -30,9 +30,10 @@ where
     F::Output: Send + 'static,
 {
     thread::spawn(move || {
+        tracing::trace!("spawning machine with addr {}", addr);
         namespace::unshare_network().unwrap();
 
-        let create_tun_iface = || {
+        async_global_executor::block_on(async move {
             let iface = iface::Iface::new().unwrap();
             iface.set_ipv4_addr(addr, mask).unwrap();
             iface.put_up().unwrap();
@@ -71,11 +72,6 @@ where
                 }
             };
 
-            (reader_task, writer_task)
-        };
-
-        async_global_executor::block_on(async move {
-            let (reader_task, writer_task) = create_tun_iface();
             async_global_executor::spawn(reader_task).detach();
             async_global_executor::spawn(writer_task).detach();
             task.await
