@@ -4,6 +4,7 @@ use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 pub use netsim_embed_core::Ipv4Range;
 use netsim_embed_core::*;
+pub use netsim_embed_machine::namespace;
 use netsim_embed_machine::*;
 use netsim_embed_nat::*;
 use netsim_embed_router::*;
