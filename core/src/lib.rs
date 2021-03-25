@@ -1,8 +1,12 @@
+use async_io::Timer;
 use futures::channel::mpsc;
+use futures::future::{poll_fn, FutureExt};
 use futures::stream::Stream;
+use std::collections::VecDeque;
 use std::net::Ipv4Addr;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use std::time::{Duration, Instant};
 
 mod addr;
 mod range;
@@ -75,4 +79,102 @@ pub fn wire() -> (Plug, Plug) {
     let a = Plug { tx: a_tx, rx: a_rx };
     let b = Plug { tx: b_tx, rx: b_rx };
     (a, b)
+}
+
+pub fn delayed_wire(delay: Duration) -> (Plug, Plug) {
+    #[allow(non_snake_case)]
+    let DURATION_MAX: Duration = Duration::from_secs(10000);
+    let (a, mut b) = wire();
+    let (mut c, d) = wire();
+    async_global_executor::spawn(async move {
+        let mut b_tx_buffer = VecDeque::new();
+        let mut c_tx_buffer = VecDeque::new();
+        let mut idle = true;
+        let mut timer = Timer::after(DURATION_MAX);
+        loop {
+            futures::select! {
+                packet = poll_fn(|cx| b.poll_incoming(cx)).fuse() => {
+                    if let Some(packet) = packet {
+                        let time = Instant::now();
+                        c_tx_buffer.push_back((packet, time + delay));
+                        if idle {
+                            timer.set_after(delay);
+                            idle = false;
+                        }
+                    }
+                }
+                packet = poll_fn(|cx| c.poll_incoming(cx)).fuse() => {
+                    if let Some(packet) = packet {
+                        let time = Instant::now();
+                        b_tx_buffer.push_back((packet, time + delay));
+                        if idle {
+                            timer.set_after(delay);
+                            idle = false;
+                        }
+                    }
+                }
+                now = (&mut timer).fuse() => {
+                    let mut wtime = DURATION_MAX;
+                    while let Some((_, time)) = b_tx_buffer.front() {
+                        if *time <= now {
+                            b.unbounded_send(b_tx_buffer.pop_front().unwrap().0);
+                        } else {
+                            let bwtime = time.duration_since(now);
+                            if wtime > bwtime {
+                                wtime = bwtime;
+                            }
+                            break;
+                        }
+                    }
+                    while let Some((_, time)) = c_tx_buffer.front() {
+                        if *time <= now {
+                            c.unbounded_send(c_tx_buffer.pop_front().unwrap().0);
+                        } else {
+                            let cwtime = time.duration_since(now);
+                            if wtime > cwtime {
+                                wtime = cwtime;
+                            }
+                            break;
+                        }
+                    }
+                    timer.set_after(wtime);
+                    idle = wtime == DURATION_MAX
+                }
+            }
+        }
+    })
+    .detach();
+    (a, d)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[async_std::test]
+    async fn test_delay() {
+        let (mut a, mut b) = delayed_wire(Duration::from_millis(100));
+        let now = Instant::now();
+        a.unbounded_send(vec![1]);
+        a.unbounded_send(vec![2]);
+        async_std::task::sleep(Duration::from_millis(10)).await;
+        a.unbounded_send(vec![3]);
+        a.unbounded_send(vec![4]);
+        poll_fn(|cx| b.poll_incoming(cx)).await;
+        println!("{:?}", now.elapsed());
+        assert!(now.elapsed() >= Duration::from_millis(100));
+        assert!(now.elapsed() < Duration::from_millis(102));
+        poll_fn(|cx| b.poll_incoming(cx)).await;
+        println!("{:?}", now.elapsed());
+        assert!(now.elapsed() >= Duration::from_millis(100));
+        assert!(now.elapsed() < Duration::from_millis(102));
+        poll_fn(|cx| b.poll_incoming(cx)).await;
+        println!("{:?}", now.elapsed());
+        assert!(now.elapsed() >= Duration::from_millis(110));
+        assert!(now.elapsed() < Duration::from_millis(112));
+        poll_fn(|cx| b.poll_incoming(cx)).await;
+        println!("{:?}", now.elapsed());
+        assert!(now.elapsed() >= Duration::from_millis(110));
+        assert!(now.elapsed() < Duration::from_millis(112));
+    }
 }

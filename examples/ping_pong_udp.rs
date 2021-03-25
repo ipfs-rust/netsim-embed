@@ -2,27 +2,32 @@ use futures::channel::mpsc;
 use futures::sink::SinkExt;
 use netsim_embed::*;
 use std::net::{SocketAddrV4, UdpSocket};
+use std::time::Duration;
 
 fn main() {
     run(async {
         let mut net = NetworkBuilder::new(Ipv4Range::global());
-        let addr = net.spawn_machine(|_: mpsc::Receiver<()>, _: mpsc::Sender<()>| async move {
-            let addr = SocketAddrV4::new(0.into(), 3000);
-            let socket = async_io::Async::<UdpSocket>::bind(addr).unwrap();
-            loop {
-                let mut buf = [0u8; 11];
-                let (len, addr) = socket.recv_from(&mut buf).await.unwrap();
-                if &buf[..len] == b"ping" {
-                    println!("received ping");
+        let addr = net.spawn_machine(
+            Duration::from_millis(0),
+            |_: mpsc::Receiver<()>, _: mpsc::Sender<()>| async move {
+                let addr = SocketAddrV4::new(0.into(), 3000);
+                let socket = async_io::Async::<UdpSocket>::bind(addr).unwrap();
+                loop {
+                    let mut buf = [0u8; 11];
+                    let (len, addr) = socket.recv_from(&mut buf).await.unwrap();
+                    if &buf[..len] == b"ping" {
+                        println!("received ping");
 
-                    socket.send_to(b"pong", addr).await.unwrap();
-                    break;
+                        socket.send_to(b"pong", addr).await.unwrap();
+                        break;
+                    }
                 }
-            }
-        });
+            },
+        );
 
         let mut local = NetworkBuilder::new(Ipv4Range::random_local_subnet());
         local.spawn_machine(
+            Duration::from_millis(0),
             move |_: mpsc::Receiver<()>, mut events: mpsc::Sender<()>| async move {
                 let laddr = SocketAddrV4::new(0.into(), 3000);
                 let socket = async_io::Async::<UdpSocket>::bind(laddr).unwrap();

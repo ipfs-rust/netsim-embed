@@ -11,6 +11,7 @@ use netsim_embed_router::*;
 pub use pnet_packet::*;
 
 use std::net::Ipv4Addr;
+use std::time::Duration;
 
 pub fn run<F>(f: F)
 where
@@ -101,12 +102,12 @@ impl<C: Send + 'static, E: Send + 'static> NetworkBuilder<C, E> {
         }
     }
 
-    pub fn spawn_machine<B, F>(&mut self, builder: B) -> Ipv4Addr
+    pub fn spawn_machine<B, F>(&mut self, delay: Duration, builder: B) -> Ipv4Addr
     where
         B: FnOnce(mpsc::Receiver<C>, mpsc::Sender<E>) -> F + Send + 'static,
         F: Future<Output = ()> + Send + 'static,
     {
-        let (iface_a, iface_b) = wire();
+        let (iface_a, iface_b) = delayed_wire(delay);
         let (cmd_tx, cmd_rx) = mpsc::channel(0);
         let (event_tx, event_rx) = mpsc::channel(0);
         let addr = self.range.random_client_addr();
