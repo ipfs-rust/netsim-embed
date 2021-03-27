@@ -81,70 +81,102 @@ pub fn wire() -> (Plug, Plug) {
     (a, b)
 }
 
-pub fn delayed_wire(delay: Duration) -> (Plug, Plug) {
-    #[allow(non_snake_case)]
-    let DURATION_MAX: Duration = Duration::from_secs(10000);
-    let (a, mut b) = wire();
-    let (mut c, d) = wire();
-    async_global_executor::spawn(async move {
-        let mut b_tx_buffer = VecDeque::new();
-        let mut c_tx_buffer = VecDeque::new();
-        let mut idle = true;
-        let mut timer = Timer::after(DURATION_MAX);
-        loop {
-            futures::select! {
-                packet = poll_fn(|cx| b.poll_incoming(cx)).fuse() => {
-                    if let Some(packet) = packet {
-                        let time = Instant::now();
-                        c_tx_buffer.push_back((packet, time + delay));
-                        if idle {
-                            timer.set_after(delay);
-                            idle = false;
-                        }
-                    }
-                }
-                packet = poll_fn(|cx| c.poll_incoming(cx)).fuse() => {
-                    if let Some(packet) = packet {
-                        let time = Instant::now();
-                        b_tx_buffer.push_back((packet, time + delay));
-                        if idle {
-                            timer.set_after(delay);
-                            idle = false;
-                        }
-                    }
-                }
-                now = (&mut timer).fuse() => {
-                    let mut wtime = DURATION_MAX;
-                    while let Some((_, time)) = b_tx_buffer.front() {
-                        if *time <= now {
-                            b.unbounded_send(b_tx_buffer.pop_front().unwrap().0);
-                        } else {
-                            let bwtime = time.duration_since(now);
-                            if wtime > bwtime {
-                                wtime = bwtime;
+pub struct Wire {
+    delay: Duration,
+    buffer_size: usize,
+}
+
+impl Wire {
+    pub fn new() -> Self {
+        Self {
+            delay: Duration::from_millis(0),
+            buffer_size: usize::MAX,
+        }
+    }
+
+    pub fn set_delay(&mut self, delay: Duration) {
+        self.delay = delay;
+    }
+
+    pub fn set_buffer_size(&mut self, buffer_size: usize) {
+        self.buffer_size = buffer_size;
+    }
+
+    pub fn spawn(self) -> (Plug, Plug) {
+        #[allow(non_snake_case)]
+        let DURATION_MAX: Duration = Duration::from_secs(10000);
+        let (a, mut b) = wire();
+        let (mut c, d) = wire();
+        async_global_executor::spawn(async move {
+            let mut b_tx_buffer_size = 0;
+            let mut b_tx_buffer = VecDeque::new();
+            let mut c_tx_buffer_size = 0;
+            let mut c_tx_buffer = VecDeque::new();
+            let mut idle = true;
+            let mut timer = Timer::after(DURATION_MAX);
+            loop {
+                futures::select! {
+                    packet = poll_fn(|cx| b.poll_incoming(cx)).fuse() => {
+                        if let Some(packet) = packet {
+                            if c_tx_buffer_size + packet.len() < self.buffer_size {
+                                c_tx_buffer_size += packet.len();
+                                let time = Instant::now();
+                                c_tx_buffer.push_back((packet, time + self.delay));
+                                if idle {
+                                    timer.set_after(self.delay);
+                                    idle = false;
+                                }
                             }
-                            break;
                         }
                     }
-                    while let Some((_, time)) = c_tx_buffer.front() {
-                        if *time <= now {
-                            c.unbounded_send(c_tx_buffer.pop_front().unwrap().0);
-                        } else {
-                            let cwtime = time.duration_since(now);
-                            if wtime > cwtime {
-                                wtime = cwtime;
+                    packet = poll_fn(|cx| c.poll_incoming(cx)).fuse() => {
+                        if let Some(packet) = packet {
+                            if b_tx_buffer_size + packet.len() < self.buffer_size {
+                                b_tx_buffer_size += packet.len();
+                                let time = Instant::now();
+                                b_tx_buffer.push_back((packet, time + self.delay));
+                                if idle {
+                                    timer.set_after(self.delay);
+                                    idle = false;
+                                }
                             }
-                            break;
                         }
                     }
-                    timer.set_after(wtime);
-                    idle = wtime == DURATION_MAX
+                    now = (&mut timer).fuse() => {
+                        let mut wtime = DURATION_MAX;
+                        while let Some((packet, time)) = b_tx_buffer.front() {
+                            if *time <= now {
+                                b_tx_buffer_size -= packet.len();
+                                b.unbounded_send(b_tx_buffer.pop_front().unwrap().0);
+                            } else {
+                                let bwtime = time.duration_since(now);
+                                if wtime > bwtime {
+                                    wtime = bwtime;
+                                }
+                                break;
+                            }
+                        }
+                        while let Some((packet, time)) = c_tx_buffer.front() {
+                            if *time <= now {
+                                c_tx_buffer_size -= packet.len();
+                                c.unbounded_send(c_tx_buffer.pop_front().unwrap().0);
+                            } else {
+                                let cwtime = time.duration_since(now);
+                                if wtime > cwtime {
+                                    wtime = cwtime;
+                                }
+                                break;
+                            }
+                        }
+                        timer.set_after(wtime);
+                        idle = wtime == DURATION_MAX
+                    }
                 }
             }
-        }
-    })
-    .detach();
-    (a, d)
+        })
+        .detach();
+        (a, d)
+    }
 }
 
 #[cfg(test)]
@@ -153,7 +185,9 @@ mod tests {
 
     #[async_std::test]
     async fn test_delay() {
-        let (mut a, mut b) = delayed_wire(Duration::from_millis(100));
+        let mut w = Wire::new();
+        w.set_delay(Duration::from_millis(100));
+        let (mut a, mut b) = w.spawn();
         let now = Instant::now();
         a.unbounded_send(vec![1]);
         a.unbounded_send(vec![2]);

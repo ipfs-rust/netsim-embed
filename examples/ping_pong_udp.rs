@@ -2,13 +2,12 @@ use futures::channel::mpsc;
 use futures::sink::SinkExt;
 use netsim_embed::*;
 use std::net::{SocketAddrV4, UdpSocket};
-use std::time::Duration;
 
 fn main() {
     run(async {
         let mut net = NetworkBuilder::new(Ipv4Range::global());
         let addr = net.spawn_machine(
-            Duration::from_millis(0),
+            Wire::new(),
             |_: mpsc::Receiver<()>, _: mpsc::Sender<()>| async move {
                 let addr = SocketAddrV4::new(0.into(), 3000);
                 let socket = async_io::Async::<UdpSocket>::bind(addr).unwrap();
@@ -27,7 +26,7 @@ fn main() {
 
         let mut local = NetworkBuilder::new(Ipv4Range::random_local_subnet());
         local.spawn_machine(
-            Duration::from_millis(0),
+            Wire::new(),
             move |_: mpsc::Receiver<()>, mut events: mpsc::Sender<()>| async move {
                 let laddr = SocketAddrV4::new(0.into(), 3000);
                 let socket = async_io::Async::<UdpSocket>::bind(laddr).unwrap();

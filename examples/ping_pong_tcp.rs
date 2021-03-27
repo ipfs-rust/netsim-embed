@@ -4,13 +4,12 @@ use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 use netsim_embed::*;
 use std::net::{SocketAddrV4, TcpListener, TcpStream};
-use std::time::Duration;
 
 fn main() {
     run(async {
         let mut net = NetworkBuilder::new(Ipv4Range::global());
         let addr = net.spawn_machine(
-            Duration::from_millis(0),
+            Wire::new(),
             |_: mpsc::Receiver<()>, _: mpsc::Sender<()>| async move {
                 let addr = SocketAddrV4::new(0.into(), 3000);
                 let listener = async_io::Async::<TcpListener>::bind(addr).unwrap();
@@ -29,7 +28,7 @@ fn main() {
 
         let mut local = NetworkBuilder::new(Ipv4Range::random_local_subnet());
         local.spawn_machine(
-            Duration::from_millis(0),
+            Wire::new(),
             move |_: mpsc::Receiver<()>, mut events: mpsc::Sender<()>| async move {
                 let addr = SocketAddrV4::new(addr, 3000);
                 let mut stream = async_io::Async::<TcpStream>::connect(addr).await.unwrap();
