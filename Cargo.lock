@@ -517,7 +517,7 @@ dependencies = [
 
 [[package]]
 name = "netsim-embed"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "async-global-executor",
  "async-io",
@@ -533,7 +533,7 @@ dependencies = [
 
 [[package]]
 name = "netsim-embed-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-global-executor",
  "async-io",

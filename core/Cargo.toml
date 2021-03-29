@@ -1,6 +1,6 @@
 [package]
 name = "netsim-embed-core"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["David Craven <david@craven.ch>"]
 edition = "2018"
 description = "Core types for netsim embed."
