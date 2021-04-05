@@ -81,6 +81,7 @@ mod ioctl {
     ioctl!(bad write siocsifaddr with 0x8916; ifreq);
     ioctl!(bad write siocsifnetmask with 0x891c; ifreq);
     ioctl!(write tunsetiff with b'T', 202; libc::c_int);
+    ioctl!(write tunsetoffload with b'T', 208; libc::c_int);
 }
 
 /// See: https://www.kernel.org/doc/Documentation/networking/tuntap.txt
@@ -138,6 +139,11 @@ impl Iface {
             errno!(ioctl::tunsetiff(fd, &mut req as *mut _ as *mut _))?;
 
             let name = CStr::from_ptr(&req.ifr_ifrn.ifrn_name as *const _).to_owned();
+
+            errno!(ioctl::tunsetoffload(
+                fd,
+                0x01 as *const libc::c_void as *const _
+            ))?;
 
             Ok(Self { name, fd })
         }

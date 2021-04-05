@@ -1,5 +1,4 @@
 mod nat;
-mod packet;
 mod port_allocator;
 mod port_map;
 

@@ -9,8 +9,10 @@ use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
 mod addr;
+mod packet;
 mod range;
 
+pub use packet::{Packet, Protocol};
 pub use range::Ipv4Range;
 
 #[derive(Clone, Copy, Debug)]

@@ -1,13 +1,11 @@
-use crate::packet::{Packet, Protocol};
+use crate::port_allocator::PortAllocator;
 use crate::port_map::PortMap;
 use futures::future::Future;
-use netsim_embed_core::{Ipv4Range, Plug};
+use netsim_embed_core::{Ipv4Range, Packet, Plug, Protocol};
 use std::collections::HashSet;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::pin::Pin;
 use std::task::{Context, Poll};
-
-use crate::port_allocator::PortAllocator;
 
 /// An Ipv4 NAT.
 #[derive(Debug)]

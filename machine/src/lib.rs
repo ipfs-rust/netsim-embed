@@ -18,7 +18,7 @@ use futures::future::Future;
 use futures::io::{AsyncReadExt, AsyncWriteExt};
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
-use netsim_embed_core::{Ipv4Range, Plug};
+use netsim_embed_core::{Ipv4Range, Packet, Plug};
 use std::net::Ipv4Addr;
 use std::thread;
 
@@ -56,7 +56,11 @@ where
                         continue;
                     }
                     log::debug!("machine {}: sending packet", addr);
-                    if tx.send(buf[..n].to_vec()).await.is_err() {
+                    let mut bytes = buf[..n].to_vec();
+                    if let Some(mut packet) = Packet::new(&mut bytes) {
+                        packet.set_checksum();
+                    }
+                    if tx.send(bytes).await.is_err() {
                         break;
                     }
                 }
