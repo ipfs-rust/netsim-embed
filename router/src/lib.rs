@@ -43,7 +43,7 @@ impl Ipv4Router {
         }
         for (tx, routes) in &self.txs {
             for route in routes {
-                if route.dest().contains(dest) {
+                if route.dest().contains(dest) || dest.is_broadcast() || dest.is_multicast() {
                     log::debug!("router {}: routing packet on route {:?}", self.addr, route);
                     let _ = tx.unbounded_send(bytes);
                     return;
