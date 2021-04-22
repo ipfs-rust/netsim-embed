@@ -147,7 +147,7 @@ impl<C: Send + 'static, E: Send + 'static> NetworkBuilder<C, E> {
     where
         C: std::fmt::Display,
         E: std::str::FromStr,
-        E::Err: std::error::Error + Send,
+        E::Err: std::fmt::Debug + Send,
     {
         self.spawn_machine(
             config,
