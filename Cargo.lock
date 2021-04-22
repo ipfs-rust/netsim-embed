@@ -517,7 +517,7 @@ dependencies = [
 
 [[package]]
 name = "netsim-embed"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "async-global-executor",
  "async-io",
@@ -529,6 +529,7 @@ dependencies = [
  "netsim-embed-nat",
  "netsim-embed-router",
  "pnet_packet",
+ "tracing",
  "udp-socket",
 ]
 

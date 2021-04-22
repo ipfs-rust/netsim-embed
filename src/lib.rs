@@ -1,7 +1,7 @@
+use async_process::Command;
 use futures::channel::mpsc;
-use futures::future::Future;
-use futures::sink::SinkExt;
-use futures::stream::StreamExt;
+use futures::io::BufReader;
+use futures::prelude::*;
 use netsim_embed_core::*;
 pub use netsim_embed_core::{Ipv4Range, Wire};
 pub use netsim_embed_machine::namespace;
@@ -9,7 +9,9 @@ use netsim_embed_machine::*;
 use netsim_embed_nat::*;
 use netsim_embed_router::*;
 pub use pnet_packet::*;
+use std::io::Write;
 use std::net::Ipv4Addr;
+use std::process::Stdio;
 
 pub fn run<F>(f: F)
 where
@@ -139,6 +141,50 @@ impl<C: Send + 'static, E: Send + 'static> NetworkBuilder<C, E> {
         self.machines.push(machine);
         self.router.add_connection(iface_a, vec![addr.into()]);
         addr
+    }
+
+    pub fn spawn_machine_with_command(&mut self, config: Wire, mut command: Command) -> Ipv4Addr
+    where
+        C: std::fmt::Display,
+        E: std::str::FromStr,
+        E::Err: std::error::Error + Send,
+    {
+        self.spawn_machine(
+            config,
+            |mut cmd: mpsc::Receiver<C>, mut event: mpsc::Sender<E>| async move {
+                command.stdin(Stdio::piped()).stdout(Stdio::piped());
+                let mut child = command.spawn().unwrap();
+                let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines().fuse();
+                let mut stdin = child.stdin.unwrap();
+                let mut buf = Vec::with_capacity(4096);
+                loop {
+                    futures::select! {
+                        cmd = cmd.next() => {
+                            if let Some(cmd) = cmd {
+                                buf.clear();
+                                tracing::trace!("{}", cmd);
+                                writeln!(buf, "{}", cmd).unwrap();
+                                stdin.write_all(&buf).await.unwrap();
+                            } else {
+                                break;
+                            }
+                        }
+                        ev = stdout.next() => {
+                            if let Some(ev) = ev {
+                                let ev = ev.unwrap();
+                                if ev.starts_with('<') {
+                                    event.send(ev.parse().unwrap()).await.unwrap();
+                                } else {
+                                    println!("{}", ev);
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+            },
+        )
     }
 
     pub fn spawn_network(&mut self, config: Option<NatConfig>, mut builder: NetworkBuilder<C, E>) {
