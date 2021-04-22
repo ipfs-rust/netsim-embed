@@ -57,8 +57,24 @@ impl<C: Send + 'static, E: Send + 'static> Network<C, E> {
         self.networks.get_mut(i).unwrap()
     }
 
+    pub fn subnets(&self) -> &[Network<C, E>] {
+        &self.networks
+    }
+
+    pub fn subnets_mut(&mut self) -> &mut [Network<C, E>] {
+        &mut self.networks
+    }
+
     pub fn machine(&mut self, i: usize) -> &mut Machine<C, E> {
         self.machines.get_mut(i).unwrap()
+    }
+
+    pub fn machines(&self) -> &[Network<C, E>] {
+        &self.networks
+    }
+
+    pub fn machines_mut(&mut self) -> &mut [Network<C, E>] {
+        &mut self.networks
     }
 }
 
