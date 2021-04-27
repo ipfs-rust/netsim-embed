@@ -8,7 +8,7 @@ fn main() {
         let mut net = NetworkBuilder::new(Ipv4Range::global());
         let addr = net.spawn_machine(
             Wire::new(),
-            |_: mpsc::Receiver<()>, _: mpsc::Sender<()>| async move {
+            |_: mpsc::UnboundedReceiver<()>, _: mpsc::UnboundedSender<()>| async move {
                 let addr = SocketAddrV4::new(0.into(), 3000);
                 let socket = async_io::Async::<UdpSocket>::bind(addr).unwrap();
                 loop {
@@ -27,7 +27,7 @@ fn main() {
         let mut local = NetworkBuilder::new(Ipv4Range::random_local_subnet());
         local.spawn_machine(
             Wire::new(),
-            move |_: mpsc::Receiver<()>, mut events: mpsc::Sender<()>| async move {
+            move |_: mpsc::UnboundedReceiver<()>, mut events: mpsc::UnboundedSender<()>| async move {
                 let laddr = SocketAddrV4::new(0.into(), 3000);
                 let socket = async_io::Async::<UdpSocket>::bind(laddr).unwrap();
                 socket

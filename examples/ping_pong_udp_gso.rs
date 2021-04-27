@@ -10,7 +10,7 @@ fn main() {
         let mut net = NetworkBuilder::new(Ipv4Range::global());
         let addr = net.spawn_machine(
             Wire::new(),
-            |_: mpsc::Receiver<()>, mut events: mpsc::Sender<()>| async move {
+            |_: mpsc::UnboundedReceiver<()>, mut events: mpsc::UnboundedSender<()>| async move {
                 let addr = SocketAddrV4::new(0.into(), 3000);
                 let socket = UdpSocket::bind(addr.into()).unwrap();
                 let mut meta = [RecvMeta::default()];
@@ -27,7 +27,7 @@ fn main() {
         );
         net.spawn_machine(
             Wire::new(),
-            move |_: mpsc::Receiver<()>, mut events: mpsc::Sender<()>| async move {
+            move |_: mpsc::UnboundedReceiver<()>, mut events: mpsc::UnboundedSender<()>| async move {
                 let laddr = SocketAddrV4::new(0.into(), 3000);
                 let socket = UdpSocket::bind(laddr.into()).unwrap();
                 let transmit = Transmit {

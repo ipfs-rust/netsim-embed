@@ -9,7 +9,7 @@ fn main() {
         let mut net = NetworkBuilder::new(Ipv4Range::global());
         let addr = net.spawn_machine(
             Wire::new(),
-            |mut cmd: mpsc::Receiver<()>, _: mpsc::Sender<()>| async move {
+            |mut cmd: mpsc::UnboundedReceiver<()>, _: mpsc::UnboundedSender<()>| async move {
                 let mut child = Command::new("iperf")
                     .arg("-s")
                     .arg("-w")
@@ -27,7 +27,7 @@ fn main() {
         wire.set_buffer_size(u64::MAX as usize);
         net.spawn_machine(
             wire,
-            move |_: mpsc::Receiver<()>, mut events: mpsc::Sender<()>| async move {
+            move |_: mpsc::UnboundedReceiver<()>, mut events: mpsc::UnboundedSender<()>| async move {
                 Command::new("iperf")
                     .arg("-c")
                     .arg(format!("{}", addr))

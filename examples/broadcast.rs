@@ -8,7 +8,7 @@ fn main() {
         let mut builder = NetworkBuilder::new(Ipv4Range::random_local_subnet());
         builder.spawn_machine(
             Wire::new(),
-            |_: mpsc::Receiver<()>, mut ev: mpsc::Sender<()>| async move {
+            |_: mpsc::UnboundedReceiver<()>, mut ev: mpsc::UnboundedSender<()>| async move {
                 let socket =
                     async_io::Async::<UdpSocket>::bind((Ipv4Addr::UNSPECIFIED, 5353)).unwrap();
                 let multicast = [224, 0, 0, 251].into();
@@ -30,7 +30,7 @@ fn main() {
 
         builder.spawn_machine(
             Wire::new(),
-            move |mut cmd: mpsc::Receiver<()>, _: mpsc::Sender<()>| async move {
+            move |mut cmd: mpsc::UnboundedReceiver<()>, _: mpsc::UnboundedSender<()>| async move {
                 let socket =
                     async_io::Async::<UdpSocket>::bind((Ipv4Addr::UNSPECIFIED, 0)).unwrap();
                 let multicast = [224, 0, 0, 251].into();

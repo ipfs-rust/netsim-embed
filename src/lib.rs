@@ -25,8 +25,8 @@ where
 #[derive(Debug)]
 pub struct Machine<C, E> {
     addr: Ipv4Addr,
-    tx: mpsc::Sender<C>,
-    rx: mpsc::Receiver<E>,
+    tx: mpsc::UnboundedSender<C>,
+    rx: mpsc::UnboundedReceiver<E>,
 }
 
 impl<C: Send + 'static, E: Send + 'static> Machine<C, E> {
@@ -120,12 +120,12 @@ impl<C: Send + 'static, E: Send + 'static> NetworkBuilder<C, E> {
 
     pub fn spawn_machine<B, F>(&mut self, config: Wire, builder: B) -> Ipv4Addr
     where
-        B: FnOnce(mpsc::Receiver<C>, mpsc::Sender<E>) -> F + Send + 'static,
+        B: FnOnce(mpsc::UnboundedReceiver<C>, mpsc::UnboundedSender<E>) -> F + Send + 'static,
         F: Future<Output = ()> + Send + 'static,
     {
         let (iface_a, iface_b) = config.spawn();
-        let (cmd_tx, cmd_rx) = mpsc::channel(0);
-        let (event_tx, event_rx) = mpsc::channel(0);
+        let (cmd_tx, cmd_rx) = mpsc::unbounded();
+        let (event_tx, event_rx) = mpsc::unbounded();
         let addr = self.range.random_client_addr();
         let mask = self.range.netmask_prefix_length();
         async_global_executor::spawn(async_global_executor::spawn_blocking(move || {
@@ -151,7 +151,7 @@ impl<C: Send + 'static, E: Send + 'static> NetworkBuilder<C, E> {
     {
         self.spawn_machine(
             config,
-            |mut cmd: mpsc::Receiver<C>, mut event: mpsc::Sender<E>| async move {
+            |mut cmd: mpsc::UnboundedReceiver<C>, event: mpsc::UnboundedSender<E>| async move {
                 command.stdin(Stdio::piped()).stdout(Stdio::piped());
                 let mut child = command.spawn().unwrap();
                 let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines().fuse();
@@ -173,7 +173,7 @@ impl<C: Send + 'static, E: Send + 'static> NetworkBuilder<C, E> {
                             if let Some(ev) = ev {
                                 let ev = ev.unwrap();
                                 if ev.starts_with('<') {
-                                    event.send(ev.parse().unwrap()).await.unwrap();
+                                    event.unbounded_send(ev.parse().unwrap()).unwrap();
                                 } else {
                                     println!("{}", ev);
                                 }
