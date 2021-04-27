@@ -88,6 +88,12 @@ pub struct Wire {
     buffer_size: usize,
 }
 
+impl Default for Wire {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Wire {
     pub fn new() -> Self {
         Self {
