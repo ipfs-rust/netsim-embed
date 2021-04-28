@@ -17,7 +17,6 @@ pub fn run<F>(f: F)
 where
     F: Future<Output = ()> + Send + 'static,
 {
-    env_logger::init();
     namespace::unshare_user().unwrap();
     async_global_executor::block_on(f);
 }

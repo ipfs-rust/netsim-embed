@@ -13,7 +13,6 @@ repository = "https://github.com/ipfs-rust/netsim-embed"
 [dependencies]
 async-global-executor = "2.0.2"
 async-process = "1.0.2"
-env_logger = "0.8.3"
 futures = "0.3.13"
 netsim-embed-core = { version = "0.2.0", path = "core" }
 netsim-embed-machine = { version = "0.2.0", path = "machine" }
