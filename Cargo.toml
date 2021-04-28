@@ -25,4 +25,6 @@ tracing = "0.1.25"
 [dev-dependencies]
 async-io = "1.3.1"
 async-process = "1.0.2"
+if-watch = "0.2.2"
+ipnet = "2.3.0"
 udp-socket = "0.1.1"
