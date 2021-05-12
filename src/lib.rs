@@ -23,6 +23,7 @@ where
 #[derive(Debug)]
 pub struct Machine<C, E> {
     addr: Ipv4Addr,
+    ctrl: mpsc::Sender<IfaceCtrl>,
     tx: mpsc::UnboundedSender<C>,
     rx: mpsc::UnboundedReceiver<E>,
 }
@@ -38,6 +39,14 @@ impl<C: Send + 'static, E: Send + 'static> Machine<C, E> {
 
     pub async fn recv(&mut self) -> Option<E> {
         self.rx.next().await
+    }
+
+    pub async fn up(&mut self) {
+        self.ctrl.send(IfaceCtrl::Up).await.unwrap();
+    }
+
+    pub async fn down(&mut self) {
+        self.ctrl.send(IfaceCtrl::Down).await.unwrap();
     }
 }
 
@@ -123,13 +132,15 @@ where
 
     pub fn spawn_machine(&mut self, config: Wire, command: Command) -> Ipv4Addr {
         let (iface_a, iface_b) = config.spawn();
+        let (ctrl_tx, ctrl_rx) = mpsc::channel(1);
         let (cmd_tx, cmd_rx) = mpsc::unbounded();
         let (event_tx, event_rx) = mpsc::unbounded();
         let addr = self.range.random_client_addr();
         let mask = self.range.netmask_prefix_length();
-        let _ = machine(addr, mask, iface_b, command, cmd_rx, event_tx);
+        let _ = machine(addr, mask, iface_b, command, ctrl_rx, cmd_rx, event_tx);
         let machine = Machine {
             addr,
+            ctrl: ctrl_tx,
             tx: cmd_tx,
             rx: event_rx,
         };

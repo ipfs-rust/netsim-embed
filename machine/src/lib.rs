@@ -16,7 +16,7 @@ pub mod namespace;
 
 use async_process::Command;
 use futures::channel::mpsc;
-use futures::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use futures::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 use netsim_embed_core::{Ipv4Range, Packet, Plug};
@@ -27,6 +27,12 @@ use std::process::Stdio;
 use std::str::FromStr;
 use std::thread;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum IfaceCtrl {
+    Up,
+    Down,
+}
+
 /// Spawns a thread in a new network namespace and configures a TUN interface that sends and
 /// receives IP packets from the tx/rx channels and runs some UDP/TCP networking code in task.
 pub fn machine<C, E>(
@@ -34,6 +40,7 @@ pub fn machine<C, E>(
     mask: u8,
     plug: Plug,
     mut bin: Command,
+    mut ctrl: mpsc::Receiver<IfaceCtrl>,
     mut cmd: mpsc::UnboundedReceiver<C>,
     event: mpsc::UnboundedSender<E>,
 ) -> thread::JoinHandle<()>
@@ -53,14 +60,21 @@ where
             iface.add_ipv4_route(Ipv4Range::global().into()).unwrap();
 
             let iface = async_io::Async::new(iface).unwrap();
-
             let (mut tx, mut rx) = plug.split();
-            let (mut reader, mut writer) = iface.split();
 
-            let reader_task = async move {
+            let ctrl_task = async {
+                while let Some(ctrl) = ctrl.next().await {
+                    match ctrl {
+                        IfaceCtrl::Up => iface.get_ref().put_up().unwrap(),
+                        IfaceCtrl::Down => iface.get_ref().put_down().unwrap(),
+                    }
+                }
+            };
+
+            let reader_task = async {
                 loop {
                     let mut buf = [0; libc::ETH_FRAME_LEN as usize];
-                    let n = reader.read(&mut buf).await.unwrap();
+                    let n = iface.read_with(|iface| iface.recv(&mut buf)).await.unwrap();
                     if n == 0 {
                         break;
                     }
@@ -79,10 +93,10 @@ where
                 }
             };
 
-            let writer_task = async move {
+            let writer_task = async {
                 while let Some(packet) = rx.next().await {
                     log::debug!("machine {}: received packet", addr);
-                    let n = writer.write(&packet).await.unwrap();
+                    let n = iface.write_with(|iface| iface.send(&packet)).await.unwrap();
                     if n == 0 {
                         break;
                     }
@@ -94,7 +108,7 @@ where
             let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines().fuse();
             let mut stdin = child.stdin.unwrap();
 
-            let command_task = async move {
+            let command_task = async {
                 let mut buf = Vec::with_capacity(4096);
                 while let Some(cmd) = cmd.next().await {
                     buf.clear();
@@ -104,7 +118,7 @@ where
                 }
             };
 
-            let event_task = async move {
+            let event_task = async {
                 while let Some(ev) = stdout.next().await {
                     let ev = ev.unwrap();
                     if ev.starts_with('<') {
@@ -115,7 +129,14 @@ where
                 }
             };
 
-            futures::future::join4(reader_task, writer_task, command_task, event_task).await;
+            futures::future::join5(
+                ctrl_task,
+                reader_task,
+                writer_task,
+                command_task,
+                event_task,
+            )
+            .await;
         })
     })
 }

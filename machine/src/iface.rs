@@ -232,6 +232,33 @@ impl Iface {
         }
     }
 
+    /// Put an interface down.
+    pub fn put_down(&self) -> Result<(), io::Error> {
+        unsafe {
+            let fd = errno!(libc::socket(
+                libc::AF_INET as i32,
+                libc::SOCK_DGRAM as i32,
+                0
+            ))?;
+            let mut req = ioctl::ifreq::new(self.name());
+
+            if let Err(err) = errno!(ioctl::siocgifflags(fd, &mut req)) {
+                let _ = libc::close(fd);
+                return Err(err);
+            }
+
+            req.ifr_ifru.ifru_flags &= !(libc::IFF_UP as i16 | libc::IFF_RUNNING as i16);
+
+            if let Err(err) = errno!(ioctl::siocsifflags(fd, &req)) {
+                let _ = libc::close(fd);
+                return Err(err);
+            }
+
+            let _ = libc::close(fd);
+            Ok(())
+        }
+    }
+
     /// Adds an ipv4 route.
     pub fn add_ipv4_route(&self, route: Ipv4Route) -> Result<(), io::Error> {
         unsafe {
