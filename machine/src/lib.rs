@@ -96,9 +96,11 @@ where
             let writer_task = async {
                 while let Some(packet) = rx.next().await {
                     log::debug!("machine {}: received packet", addr);
-                    let n = iface.write_with(|iface| iface.send(&packet)).await.unwrap();
-                    if n == 0 {
-                        break;
+                    // can error if the interface is down
+                    if let Ok(n) = iface.write_with(|iface| iface.send(&packet)).await {
+                        if n == 0 {
+                            break;
+                        }
                     }
                 }
             };
