@@ -22,6 +22,7 @@ where
 
 #[derive(Debug)]
 pub struct Machine<C, E> {
+    id: u64,
     addr: Ipv4Addr,
     ctrl: mpsc::Sender<IfaceCtrl>,
     tx: mpsc::UnboundedSender<C>,
@@ -29,6 +30,10 @@ pub struct Machine<C, E> {
 }
 
 impl<C: Send + 'static, E: Send + 'static> Machine<C, E> {
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
     pub fn addr(&self) -> Ipv4Addr {
         self.addr
     }
@@ -143,6 +148,7 @@ where
         let mask = self.range.netmask_prefix_length();
         let _ = machine(addr, mask, iface_b, command, ctrl_rx, cmd_rx, event_tx);
         let machine = Machine {
+            id: self.machines.len() as _,
             addr,
             ctrl: ctrl_tx,
             tx: cmd_tx,
