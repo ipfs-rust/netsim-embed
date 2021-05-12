@@ -14,20 +14,33 @@ macro_rules! errno {
 pub mod iface;
 pub mod namespace;
 
-use futures::future::Future;
-use futures::io::{AsyncReadExt, AsyncWriteExt};
+use async_process::Command;
+use futures::channel::mpsc;
+use futures::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 use netsim_embed_core::{Ipv4Range, Packet, Plug};
+use std::fmt::Display;
+use std::io::Write;
 use std::net::Ipv4Addr;
+use std::process::Stdio;
+use std::str::FromStr;
 use std::thread;
 
 /// Spawns a thread in a new network namespace and configures a TUN interface that sends and
 /// receives IP packets from the tx/rx channels and runs some UDP/TCP networking code in task.
-pub fn machine<F>(addr: Ipv4Addr, mask: u8, plug: Plug, task: F) -> thread::JoinHandle<F::Output>
+pub fn machine<C, E>(
+    addr: Ipv4Addr,
+    mask: u8,
+    plug: Plug,
+    mut bin: Command,
+    mut cmd: mpsc::UnboundedReceiver<C>,
+    event: mpsc::UnboundedSender<E>,
+) -> thread::JoinHandle<()>
 where
-    F: Future + Send + 'static,
-    F::Output: Send + 'static,
+    C: Display + Send + 'static,
+    E: FromStr + Send + 'static,
+    E::Err: std::fmt::Debug + Send,
 {
     thread::spawn(move || {
         tracing::trace!("spawning machine with addr {}", addr);
@@ -76,9 +89,33 @@ where
                 }
             };
 
-            async_global_executor::spawn(reader_task).detach();
-            async_global_executor::spawn(writer_task).detach();
-            task.await
+            bin.stdin(Stdio::piped()).stdout(Stdio::piped());
+            let mut child = bin.spawn().unwrap();
+            let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines().fuse();
+            let mut stdin = child.stdin.unwrap();
+
+            let command_task = async move {
+                let mut buf = Vec::with_capacity(4096);
+                while let Some(cmd) = cmd.next().await {
+                    buf.clear();
+                    tracing::trace!("{}", cmd);
+                    writeln!(buf, "{}", cmd).unwrap();
+                    stdin.write_all(&buf).await.unwrap();
+                }
+            };
+
+            let event_task = async move {
+                while let Some(ev) = stdout.next().await {
+                    let ev = ev.unwrap();
+                    if ev.starts_with('<') {
+                        event.unbounded_send(ev.parse().unwrap()).unwrap();
+                    } else {
+                        println!("{}", ev);
+                    }
+                }
+            };
+
+            futures::future::join4(reader_task, writer_task, command_task, event_task).await;
         })
     })
 }
