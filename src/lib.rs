@@ -130,12 +130,16 @@ where
         }
     }
 
-    pub fn spawn_machine(&mut self, config: Wire, command: Command) -> Ipv4Addr {
+    pub fn random_client_addr(&self) -> Ipv4Addr {
+        self.range.random_client_addr()
+    }
+
+    pub fn spawn_machine(&mut self, config: Wire, addr: Option<Ipv4Addr>, command: Command) {
         let (iface_a, iface_b) = config.spawn();
         let (ctrl_tx, ctrl_rx) = mpsc::channel(1);
         let (cmd_tx, cmd_rx) = mpsc::unbounded();
         let (event_tx, event_rx) = mpsc::unbounded();
-        let addr = self.range.random_client_addr();
+        let addr = addr.unwrap_or_else(|| self.random_client_addr());
         let mask = self.range.netmask_prefix_length();
         let _ = machine(addr, mask, iface_b, command, ctrl_rx, cmd_rx, event_tx);
         let machine = Machine {
@@ -146,7 +150,6 @@ where
         };
         self.machines.push(machine);
         self.router.add_connection(iface_a, vec![addr.into()]);
-        addr
     }
 
     pub fn spawn_network(&mut self, config: Option<NatConfig>, mut builder: NetworkBuilder<C, E>) {
