@@ -42,8 +42,11 @@ jobs:
     - name: Build
       run: cargo build --all-features --workspace --target ${{ matrix.platform.target }}
 
-    - name: Rust tests
+    - name: Run tests
       run: cargo test --all-features --workspace
+
+    - name: Build netsim-embed-cli
+      run: cargo build -p netsim-embed-cli
 
     - name: Run tcp example
       run: cd ./target/debug && netsim-embed-cli --client ./examples/tcp_client --server ./examples/tcp_server --topology m2
