@@ -31,7 +31,7 @@ jobs:
 
     - name: Install dependencies ubuntu
       if: matrix.platform.host == 'ubuntu-latest'
-      run: sudo apt-get install llvm-dev
+      run: sudo apt-get install iperf net-tools
 
     - name: Install rust toolchain
       uses: hecrj/setup-rust-action@v1
