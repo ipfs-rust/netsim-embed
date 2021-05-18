@@ -29,8 +29,8 @@ use std::process::Stdio;
 use std::str::FromStr;
 use std::thread;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum IfaceCtrl {
+#[derive(Debug)]
+enum IfaceCtrl {
     Up,
     Down,
     SetAddr(Ipv4Addr, u8),
@@ -38,12 +38,92 @@ pub enum IfaceCtrl {
 
 /// Spawns a thread in a new network namespace and configures a TUN interface that sends and
 /// receives IP packets from the tx/rx channels and runs some UDP/TCP networking code in task.
-pub fn machine<C, E>(
+#[derive(Debug)]
+pub struct Machine<C, E> {
+    id: u64,
+    addr: Ipv4Addr,
+    mask: u8,
+    ns: Namespace,
+    ctrl: mpsc::UnboundedSender<IfaceCtrl>,
+    tx: mpsc::UnboundedSender<C>,
+    rx: mpsc::UnboundedReceiver<E>,
+    join: Option<thread::JoinHandle<Result<()>>>,
+}
+
+impl<C, E> Machine<C, E>
+where
+    C: Display + Send + 'static,
+    E: FromStr + Send + 'static,
+    E::Err: std::fmt::Debug + std::error::Error + Send + Sync,
+{
+    pub async fn new(id: u64, addr: Ipv4Addr, mask: u8, plug: Plug, cmd: Command) -> Self {
+        let (ctrl_tx, ctrl_rx) = mpsc::unbounded();
+        let (cmd_tx, cmd_rx) = mpsc::unbounded();
+        let (event_tx, event_rx) = mpsc::unbounded();
+        let (ns_tx, ns_rx) = oneshot::channel();
+        let join = machine(addr, mask, plug, cmd, ctrl_rx, ns_tx, cmd_rx, event_tx);
+        let ns = ns_rx.await.unwrap();
+        Self {
+            id,
+            addr,
+            mask,
+            ns,
+            ctrl: ctrl_tx,
+            tx: cmd_tx,
+            rx: event_rx,
+            join: Some(join),
+        }
+    }
+
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
+    pub fn addr(&self) -> Ipv4Addr {
+        self.addr
+    }
+
+    pub fn set_addr(&mut self, addr: Ipv4Addr) {
+        self.ctrl
+            .unbounded_send(IfaceCtrl::SetAddr(addr, self.mask))
+            .unwrap();
+        self.addr = addr;
+    }
+
+    pub fn send(&mut self, cmd: C) {
+        self.tx.unbounded_send(cmd).unwrap();
+    }
+
+    pub async fn recv(&mut self) -> Option<E> {
+        self.rx.next().await
+    }
+
+    pub fn up(&mut self) {
+        self.ctrl.unbounded_send(IfaceCtrl::Up).unwrap();
+    }
+
+    pub fn down(&mut self) {
+        self.ctrl.unbounded_send(IfaceCtrl::Down).unwrap();
+    }
+
+    pub fn namespace(&self) -> Namespace {
+        self.ns
+    }
+}
+
+impl<C, E> Drop for Machine<C, E> {
+    fn drop(&mut self) {
+        self.join.take().unwrap().join().unwrap().unwrap();
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn machine<C, E>(
     addr: Ipv4Addr,
     mask: u8,
     plug: Plug,
     mut bin: Command,
-    mut ctrl: mpsc::Receiver<IfaceCtrl>,
+    mut ctrl: mpsc::UnboundedReceiver<IfaceCtrl>,
     ns_tx: oneshot::Sender<Namespace>,
     mut cmd: mpsc::UnboundedReceiver<C>,
     event: mpsc::UnboundedSender<E>,
@@ -96,7 +176,7 @@ where
                     if let Some(mut packet) = Packet::new(&mut bytes) {
                         packet.set_checksum();
                     }
-                    if let Err(_) = tx.send(bytes).await {
+                    if tx.send(bytes).await.is_err() {
                         break;
                     }
                 }
@@ -119,7 +199,7 @@ where
             bin.stdin(Stdio::piped()).stdout(Stdio::piped());
             let mut child = bin.spawn()?;
             let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines().fuse();
-            let mut stdin = child.stdin.unwrap();
+            let mut stdin = child.stdin.take().unwrap();
 
             let command_task = async {
                 let mut buf = Vec::with_capacity(4096);
@@ -140,7 +220,7 @@ where
                             Ok(ev) => ev,
                             Err(err) => return Err(Error::new(ErrorKind::Other, err)),
                         };
-                        if let Err(_) = event.unbounded_send(ev) {
+                        if event.unbounded_send(ev).is_err() {
                             break;
                         }
                     } else {
@@ -158,6 +238,7 @@ where
                 event_task,
             )
             .await;
+            child.status().await.unwrap();
             res1?;
             res2?;
             res3?;

@@ -1,5 +1,4 @@
 use async_process::Command;
-use futures::channel::{mpsc, oneshot};
 use futures::prelude::*;
 pub use libpacket::*;
 use netsim_embed_core::*;
@@ -18,55 +17,6 @@ where
 {
     unshare_user().unwrap();
     async_global_executor::block_on(f);
-}
-
-#[derive(Debug)]
-pub struct Machine<C, E> {
-    id: u64,
-    addr: Ipv4Addr,
-    mask: u8,
-    ns: Namespace,
-    ctrl: mpsc::Sender<IfaceCtrl>,
-    tx: mpsc::UnboundedSender<C>,
-    rx: mpsc::UnboundedReceiver<E>,
-}
-
-impl<C: Send + 'static, E: Send + 'static> Machine<C, E> {
-    pub fn id(&self) -> u64 {
-        self.id
-    }
-
-    pub fn addr(&self) -> Ipv4Addr {
-        self.addr
-    }
-
-    pub async fn set_addr(&mut self, addr: Ipv4Addr) {
-        self.ctrl
-            .send(IfaceCtrl::SetAddr(addr, self.mask))
-            .await
-            .unwrap();
-        self.addr = addr;
-    }
-
-    pub async fn send(&mut self, cmd: C) {
-        self.tx.send(cmd).await.unwrap();
-    }
-
-    pub async fn recv(&mut self) -> Option<E> {
-        self.rx.next().await
-    }
-
-    pub async fn up(&mut self) {
-        self.ctrl.send(IfaceCtrl::Up).await.unwrap();
-    }
-
-    pub async fn down(&mut self) {
-        self.ctrl.send(IfaceCtrl::Down).await.unwrap();
-    }
-
-    pub fn namespace(&self) -> Namespace {
-        self.ns
-    }
 }
 
 #[derive(Debug)]
@@ -137,7 +87,7 @@ impl<C, E> NetworkBuilder<C, E>
 where
     C: Display + Send + 'static,
     E: FromStr + Send + 'static,
-    E::Err: std::fmt::Debug + Send,
+    E::Err: std::fmt::Debug + std::error::Error + Send + Sync,
 {
     pub fn new(range: Ipv4Range) -> Self {
         let router = Ipv4Router::new(range.gateway_addr());
@@ -155,25 +105,9 @@ where
 
     pub async fn spawn_machine(&mut self, config: Wire, addr: Option<Ipv4Addr>, command: Command) {
         let (iface_a, iface_b) = config.spawn();
-        let (ctrl_tx, ctrl_rx) = mpsc::channel(1);
-        let (cmd_tx, cmd_rx) = mpsc::unbounded();
-        let (event_tx, event_rx) = mpsc::unbounded();
-        let (ns_tx, ns_rx) = oneshot::channel();
         let addr = addr.unwrap_or_else(|| self.random_client_addr());
         let mask = self.range.netmask_prefix_length();
-        let _ = machine(
-            addr, mask, iface_b, command, ctrl_rx, ns_tx, cmd_rx, event_tx,
-        );
-        let ns = ns_rx.await.unwrap();
-        let machine = Machine {
-            id: self.machines.len() as _,
-            addr,
-            mask,
-            ns,
-            ctrl: ctrl_tx,
-            tx: cmd_tx,
-            rx: event_rx,
-        };
+        let machine = Machine::new(self.machines.len() as _, addr, mask, iface_b, command).await;
         self.machines.push(machine);
         self.router.add_connection(iface_a, vec![addr.into()]);
     }
