@@ -1,4 +1,4 @@
-use netsim_embed::{run, Ipv4Range, NetworkBuilder, Wire};
+use netsim_embed::{run, Ipv4Range, Network, Wire};
 use netsim_embed_cli::{Command, Event};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -20,13 +20,14 @@ fn main() {
     env_logger::init();
     run(async {
         let opts = Opts::from_args();
-        let mut net = NetworkBuilder::new(Ipv4Range::global());
+        let mut net = Network::new(Ipv4Range::global());
         let addr = net.random_client_addr();
         net.spawn_machine(
             Wire::new(),
             Some(addr),
             async_process::Command::new(opts.server),
-        );
+        )
+        .await;
         let mut wire = Wire::new();
         if let Some(delay) = opts.delay_ms {
             wire.set_delay(Duration::from_millis(delay));
@@ -39,20 +40,19 @@ fn main() {
                 net.spawn_machine(wire, None, client).await;
             }
             "m1m1" => {
-                let mut net2 = NetworkBuilder::new(Ipv4Range::global());
+                let mut net2 = Network::new(Ipv4Range::global());
                 net2.spawn_machine(wire, None, client).await;
                 net.spawn_network(None, net2);
             }
             "m1nm1" => {
-                let mut net2 = NetworkBuilder::new(Ipv4Range::global());
+                let mut net2 = Network::new(Ipv4Range::global());
                 net2.spawn_machine(wire, None, client).await;
                 net.spawn_network(Some(Default::default()), net2);
             }
             _ => panic!("unsupported topology"),
         }
-        let mut net = net.spawn();
         let server = net.machine(0);
-        server.send(Command::Start).await;
+        server.send(Command::Start);
         loop {
             if server.recv().await == Some(Event::Started) {
                 break;
@@ -63,20 +63,20 @@ fn main() {
         } else {
             net.subnet(0).machine(0)
         };
-        client.send(Command::Start).await;
+        client.send(Command::Start);
         loop {
             if client.recv().await == Some(Event::Started) {
                 break;
             }
         }
-        client.send(Command::Exit).await;
+        client.send(Command::Exit);
         loop {
             if client.recv().await == Some(Event::Exited) {
                 break;
             }
         }
         let server = net.machine(0);
-        server.send(Command::Exit).await;
+        server.send(Command::Exit);
         loop {
             if server.recv().await == Some(Event::Exited) {
                 break;

@@ -54,7 +54,7 @@ impl<C, E> Machine<C, E>
 where
     C: Display + Send + 'static,
     E: FromStr + Send + 'static,
-    E::Err: std::fmt::Debug + std::error::Error + Send + Sync,
+    E::Err: std::fmt::Debug + Display + Send + Sync,
 {
     pub async fn new(id: u64, addr: Ipv4Addr, mask: u8, plug: Plug, cmd: Command) -> Self {
         let (ctrl_tx, ctrl_rx) = mpsc::unbounded();
@@ -131,7 +131,7 @@ fn machine<C, E>(
 where
     C: Display + Send + 'static,
     E: FromStr + Send + 'static,
-    E::Err: std::fmt::Debug + std::error::Error + Send + Sync,
+    E::Err: std::fmt::Debug + Display + Send + Sync,
 {
     thread::spawn(move || {
         tracing::trace!("spawning machine with addr {}", addr);
@@ -216,9 +216,9 @@ where
                 while let Some(ev) = stdout.next().await {
                     let ev = ev?;
                     if ev.starts_with('<') {
-                        let ev = match ev.parse() {
+                        let ev = match E::from_str(&ev) {
                             Ok(ev) => ev,
-                            Err(err) => return Err(Error::new(ErrorKind::Other, err)),
+                            Err(err) => return Err(Error::new(ErrorKind::Other, err.to_string())),
                         };
                         if event.unbounded_send(ev).is_err() {
                             break;

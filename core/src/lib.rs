@@ -1,7 +1,7 @@
 use async_io::Timer;
 use futures::channel::mpsc;
-use futures::future::{poll_fn, FutureExt};
-use futures::stream::Stream;
+use futures::future::FutureExt;
+use futures::stream::{Stream, StreamExt};
 use std::collections::VecDeque;
 use std::net::Ipv4Addr;
 use std::pin::Pin;
@@ -59,6 +59,10 @@ pub struct Plug {
 impl Plug {
     pub fn poll_incoming(&mut self, cx: &mut Context) -> Poll<Option<Vec<u8>>> {
         Pin::new(&mut self.rx).poll_next(cx)
+    }
+
+    pub async fn incoming(&mut self) -> Option<Vec<u8>> {
+        self.rx.next().await
     }
 
     pub fn unbounded_send(&mut self, packet: Vec<u8>) {
@@ -124,7 +128,7 @@ impl Wire {
             let mut timer = Timer::after(DURATION_MAX);
             loop {
                 futures::select! {
-                    packet = poll_fn(|cx| b.poll_incoming(cx)).fuse() => {
+                    packet = b.incoming().fuse() => {
                         if let Some(packet) = packet {
                             if c_tx_buffer_size + packet.len() < self.buffer_size {
                                 c_tx_buffer_size += packet.len();
@@ -137,7 +141,7 @@ impl Wire {
                             }
                         }
                     }
-                    packet = poll_fn(|cx| c.poll_incoming(cx)).fuse() => {
+                    packet = c.incoming().fuse() => {
                         if let Some(packet) = packet {
                             if b_tx_buffer_size + packet.len() < self.buffer_size {
                                 b_tx_buffer_size += packet.len();
@@ -150,7 +154,7 @@ impl Wire {
                             }
                         }
                     }
-                    now = (&mut timer).fuse() => {
+                    now = FutureExt::fuse(&mut timer) => {
                         let mut wtime = DURATION_MAX;
                         while let Some((packet, time)) = b_tx_buffer.front() {
                             if *time <= now {
@@ -202,19 +206,19 @@ mod tests {
         async_std::task::sleep(Duration::from_millis(10)).await;
         a.unbounded_send(vec![3]);
         a.unbounded_send(vec![4]);
-        poll_fn(|cx| b.poll_incoming(cx)).await;
+        b.incoming().await;
         println!("{:?}", now.elapsed());
         assert!(now.elapsed() >= Duration::from_millis(100));
         assert!(now.elapsed() < Duration::from_millis(102));
-        poll_fn(|cx| b.poll_incoming(cx)).await;
+        b.incoming().await;
         println!("{:?}", now.elapsed());
         assert!(now.elapsed() >= Duration::from_millis(100));
         assert!(now.elapsed() < Duration::from_millis(102));
-        poll_fn(|cx| b.poll_incoming(cx)).await;
+        b.incoming().await;
         println!("{:?}", now.elapsed());
         assert!(now.elapsed() >= Duration::from_millis(110));
         assert!(now.elapsed() < Duration::from_millis(112));
-        poll_fn(|cx| b.poll_incoming(cx)).await;
+        b.incoming().await;
         println!("{:?}", now.elapsed());
         assert!(now.elapsed() >= Duration::from_millis(110));
         assert!(now.elapsed() < Duration::from_millis(112));
