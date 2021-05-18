@@ -139,6 +139,8 @@ impl Wire {
                                     idle = false;
                                 }
                             }
+                        } else {
+                            break;
                         }
                     }
                     packet = c.incoming().fuse() => {
@@ -152,6 +154,8 @@ impl Wire {
                                     idle = false;
                                 }
                             }
+                        } else {
+                            break;
                         }
                     }
                     now = FutureExt::fuse(&mut timer) => {

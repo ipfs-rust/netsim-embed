@@ -18,6 +18,7 @@ pub use namespace::{unshare_user, Namespace};
 
 use async_process::Command;
 use futures::channel::{mpsc, oneshot};
+use futures::future::FutureExt;
 use futures::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
@@ -158,7 +159,9 @@ where
                     }
                 }
                 Result::Ok(())
-            };
+            }
+            .fuse();
+            futures::pin_mut!(ctrl_task);
 
             let reader_task = async {
                 loop {
@@ -181,7 +184,9 @@ where
                     }
                 }
                 Result::Ok(())
-            };
+            }
+            .fuse();
+            futures::pin_mut!(reader_task);
 
             let writer_task = async {
                 while let Some(packet) = rx.next().await {
@@ -194,7 +199,9 @@ where
                     }
                 }
                 Result::Ok(())
-            };
+            }
+            .fuse();
+            futures::pin_mut!(writer_task);
 
             bin.stdin(Stdio::piped()).stdout(Stdio::piped());
             let mut child = bin.spawn()?;
@@ -210,7 +217,9 @@ where
                     stdin.write_all(&buf).await?;
                 }
                 Result::Ok(())
-            };
+            }
+            .fuse();
+            futures::pin_mut!(command_task);
 
             let event_task = async {
                 while let Some(ev) = stdout.next().await {
@@ -228,22 +237,18 @@ where
                     }
                 }
                 Result::Ok(())
-            };
+            }
+            .fuse();
+            futures::pin_mut!(event_task);
 
-            let (res1, res2, res3, res4, res5) = futures::future::join5(
-                ctrl_task,
-                reader_task,
-                writer_task,
-                command_task,
-                event_task,
-            )
-            .await;
+            futures::select! {
+                res = ctrl_task => res?,
+                res = reader_task => res?,
+                res = writer_task => res?,
+                res = command_task => res?,
+                res = event_task => res?,
+            }
             child.status().await.unwrap();
-            res1?;
-            res2?;
-            res3?;
-            res4?;
-            res5?;
             Ok(())
         })
     })
