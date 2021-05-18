@@ -16,7 +16,8 @@ fn main() {
             Wire::new(),
             Some(addr1),
             async_process::Command::new(if_watch_bin),
-        );
+        )
+        .await;
         let mut net = net.spawn();
         let machine = net.machine(0);
         assert_eq!(machine.recv().await, Some(format!("<up {}/0", addr1)));

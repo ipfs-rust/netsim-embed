@@ -12,10 +12,12 @@ macro_rules! errno {
 }
 
 pub mod iface;
-pub mod namespace;
+mod namespace;
+
+pub use namespace::{unshare_user, Namespace};
 
 use async_process::Command;
-use futures::channel::mpsc;
+use futures::channel::{mpsc, oneshot};
 use futures::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
@@ -42,6 +44,7 @@ pub fn machine<C, E>(
     plug: Plug,
     mut bin: Command,
     mut ctrl: mpsc::Receiver<IfaceCtrl>,
+    ns_tx: oneshot::Sender<Namespace>,
     mut cmd: mpsc::UnboundedReceiver<C>,
     event: mpsc::UnboundedSender<E>,
 ) -> thread::JoinHandle<()>
@@ -52,7 +55,8 @@ where
 {
     thread::spawn(move || {
         tracing::trace!("spawning machine with addr {}", addr);
-        namespace::unshare_network().unwrap();
+        let ns = Namespace::unshare().unwrap();
+        ns_tx.send(ns).unwrap();
 
         async_global_executor::block_on(async move {
             let iface = iface::Iface::new().unwrap();

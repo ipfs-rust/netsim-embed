@@ -1,10 +1,10 @@
 use async_process::Command;
-use futures::channel::mpsc;
+use futures::channel::{mpsc, oneshot};
 use futures::prelude::*;
 pub use libpacket::*;
 use netsim_embed_core::*;
 pub use netsim_embed_core::{Ipv4Range, Wire};
-pub use netsim_embed_machine::namespace;
+pub use netsim_embed_machine::unshare_user;
 use netsim_embed_machine::*;
 use netsim_embed_nat::*;
 use netsim_embed_router::*;
@@ -16,7 +16,7 @@ pub fn run<F>(f: F)
 where
     F: Future<Output = ()> + Send + 'static,
 {
-    namespace::unshare_user().unwrap();
+    unshare_user().unwrap();
     async_global_executor::block_on(f);
 }
 
@@ -25,6 +25,7 @@ pub struct Machine<C, E> {
     id: u64,
     addr: Ipv4Addr,
     mask: u8,
+    ns: Namespace,
     ctrl: mpsc::Sender<IfaceCtrl>,
     tx: mpsc::UnboundedSender<C>,
     rx: mpsc::UnboundedReceiver<E>,
@@ -61,6 +62,10 @@ impl<C: Send + 'static, E: Send + 'static> Machine<C, E> {
 
     pub async fn down(&mut self) {
         self.ctrl.send(IfaceCtrl::Down).await.unwrap();
+    }
+
+    pub fn namespace(&self) -> Namespace {
+        self.ns
     }
 }
 
@@ -148,18 +153,23 @@ where
         self.range.random_client_addr()
     }
 
-    pub fn spawn_machine(&mut self, config: Wire, addr: Option<Ipv4Addr>, command: Command) {
+    pub async fn spawn_machine(&mut self, config: Wire, addr: Option<Ipv4Addr>, command: Command) {
         let (iface_a, iface_b) = config.spawn();
         let (ctrl_tx, ctrl_rx) = mpsc::channel(1);
         let (cmd_tx, cmd_rx) = mpsc::unbounded();
         let (event_tx, event_rx) = mpsc::unbounded();
+        let (ns_tx, ns_rx) = oneshot::channel();
         let addr = addr.unwrap_or_else(|| self.random_client_addr());
         let mask = self.range.netmask_prefix_length();
-        let _ = machine(addr, mask, iface_b, command, ctrl_rx, cmd_rx, event_tx);
+        let _ = machine(
+            addr, mask, iface_b, command, ctrl_rx, ns_tx, cmd_rx, event_tx,
+        );
+        let ns = ns_rx.await.unwrap();
         let machine = Machine {
             id: self.machines.len() as _,
             addr,
             mask,
+            ns,
             ctrl: ctrl_tx,
             tx: cmd_tx,
             rx: event_rx,

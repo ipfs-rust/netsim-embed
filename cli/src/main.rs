@@ -36,16 +36,16 @@ fn main() {
         client.arg(addr.to_string());
         match opts.topology.as_str() {
             "m2" => {
-                net.spawn_machine(wire, None, client);
+                net.spawn_machine(wire, None, client).await;
             }
             "m1m1" => {
                 let mut net2 = NetworkBuilder::new(Ipv4Range::global());
-                net2.spawn_machine(wire, None, client);
+                net2.spawn_machine(wire, None, client).await;
                 net.spawn_network(None, net2);
             }
             "m1nm1" => {
                 let mut net2 = NetworkBuilder::new(Ipv4Range::global());
-                net2.spawn_machine(wire, None, client);
+                net2.spawn_machine(wire, None, client).await;
                 net.spawn_network(Some(Default::default()), net2);
             }
             _ => panic!("unsupported topology"),
