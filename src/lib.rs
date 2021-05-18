@@ -1,17 +1,16 @@
 use async_process::Command;
 use futures::channel::mpsc;
-use futures::io::BufReader;
 use futures::prelude::*;
+pub use libpacket::*;
 use netsim_embed_core::*;
 pub use netsim_embed_core::{Ipv4Range, Wire};
 pub use netsim_embed_machine::namespace;
 use netsim_embed_machine::*;
 use netsim_embed_nat::*;
 use netsim_embed_router::*;
-pub use pnet_packet::*;
-use std::io::Write;
+use std::fmt::Display;
 use std::net::Ipv4Addr;
-use std::process::Stdio;
+use std::str::FromStr;
 
 pub fn run<F>(f: F)
 where
@@ -23,14 +22,29 @@ where
 
 #[derive(Debug)]
 pub struct Machine<C, E> {
+    id: u64,
     addr: Ipv4Addr,
+    mask: u8,
+    ctrl: mpsc::Sender<IfaceCtrl>,
     tx: mpsc::UnboundedSender<C>,
     rx: mpsc::UnboundedReceiver<E>,
 }
 
 impl<C: Send + 'static, E: Send + 'static> Machine<C, E> {
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
     pub fn addr(&self) -> Ipv4Addr {
         self.addr
+    }
+
+    pub async fn set_addr(&mut self, addr: Ipv4Addr) {
+        self.ctrl
+            .send(IfaceCtrl::SetAddr(addr, self.mask))
+            .await
+            .unwrap();
+        self.addr = addr;
     }
 
     pub async fn send(&mut self, cmd: C) {
@@ -39,6 +53,14 @@ impl<C: Send + 'static, E: Send + 'static> Machine<C, E> {
 
     pub async fn recv(&mut self) -> Option<E> {
         self.rx.next().await
+    }
+
+    pub async fn up(&mut self) {
+        self.ctrl.send(IfaceCtrl::Up).await.unwrap();
+    }
+
+    pub async fn down(&mut self) {
+        self.ctrl.send(IfaceCtrl::Down).await.unwrap();
     }
 }
 
@@ -106,7 +128,12 @@ pub struct NetworkBuilder<C, E> {
     networks: Vec<Network<C, E>>,
 }
 
-impl<C: Send + 'static, E: Send + 'static> NetworkBuilder<C, E> {
+impl<C, E> NetworkBuilder<C, E>
+where
+    C: Display + Send + 'static,
+    E: FromStr + Send + 'static,
+    E::Err: std::fmt::Debug + Send,
+{
     pub fn new(range: Ipv4Range) -> Self {
         let router = Ipv4Router::new(range.gateway_addr());
         Self {
@@ -117,73 +144,28 @@ impl<C: Send + 'static, E: Send + 'static> NetworkBuilder<C, E> {
         }
     }
 
-    pub fn spawn_machine<B, F>(&mut self, config: Wire, builder: B) -> Ipv4Addr
-    where
-        B: FnOnce(mpsc::UnboundedReceiver<C>, mpsc::UnboundedSender<E>) -> F + Send + 'static,
-        F: Future<Output = ()> + Send + 'static,
-    {
+    pub fn random_client_addr(&self) -> Ipv4Addr {
+        self.range.random_client_addr()
+    }
+
+    pub fn spawn_machine(&mut self, config: Wire, addr: Option<Ipv4Addr>, command: Command) {
         let (iface_a, iface_b) = config.spawn();
+        let (ctrl_tx, ctrl_rx) = mpsc::channel(1);
         let (cmd_tx, cmd_rx) = mpsc::unbounded();
         let (event_tx, event_rx) = mpsc::unbounded();
-        let addr = self.range.random_client_addr();
+        let addr = addr.unwrap_or_else(|| self.random_client_addr());
         let mask = self.range.netmask_prefix_length();
-        async_global_executor::spawn(async_global_executor::spawn_blocking(move || {
-            let join = machine(addr, mask, iface_b, builder(cmd_rx, event_tx));
-            join.join().unwrap();
-        }))
-        .detach();
+        let _ = machine(addr, mask, iface_b, command, ctrl_rx, cmd_rx, event_tx);
         let machine = Machine {
+            id: self.machines.len() as _,
             addr,
+            mask,
+            ctrl: ctrl_tx,
             tx: cmd_tx,
             rx: event_rx,
         };
         self.machines.push(machine);
         self.router.add_connection(iface_a, vec![addr.into()]);
-        addr
-    }
-
-    pub fn spawn_machine_with_command(&mut self, config: Wire, mut command: Command) -> Ipv4Addr
-    where
-        C: std::fmt::Display,
-        E: std::str::FromStr,
-        E::Err: std::fmt::Debug + Send,
-    {
-        self.spawn_machine(
-            config,
-            |mut cmd: mpsc::UnboundedReceiver<C>, event: mpsc::UnboundedSender<E>| async move {
-                command.stdin(Stdio::piped()).stdout(Stdio::piped());
-                let mut child = command.spawn().unwrap();
-                let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines().fuse();
-                let mut stdin = child.stdin.unwrap();
-                let mut buf = Vec::with_capacity(4096);
-                loop {
-                    futures::select! {
-                        cmd = cmd.next() => {
-                            if let Some(cmd) = cmd {
-                                buf.clear();
-                                tracing::trace!("{}", cmd);
-                                writeln!(buf, "{}", cmd).unwrap();
-                                stdin.write_all(&buf).await.unwrap();
-                            } else {
-                                break;
-                            }
-                        }
-                        ev = stdout.next() => {
-                            if let Some(ev) = ev {
-                                let ev = ev.unwrap();
-                                if ev.starts_with('<') {
-                                    event.unbounded_send(ev.parse().unwrap()).unwrap();
-                                } else {
-                                    println!("{}", ev);
-                                }
-                            } else {
-                                break;
-                            }
-                        }
-                    }
-                }
-            },
-        )
     }
 
     pub fn spawn_network(&mut self, config: Option<NatConfig>, mut builder: NetworkBuilder<C, E>) {

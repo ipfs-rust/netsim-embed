@@ -1,32 +1,23 @@
-use futures::channel::mpsc;
+use anyhow::Result;
 use if_watch::{IfEvent, IfWatcher};
-use ipnet::{IpNet, Ipv4Net};
-use netsim_embed::*;
+use ipnet::IpNet;
 
-fn main() {
-    run(async {
-        let mut net = NetworkBuilder::new(Ipv4Range::global());
-        for _ in 0..100 {
-            net.spawn_machine(
-                Wire::new(),
-                |_: mpsc::UnboundedReceiver<()>, ev: mpsc::UnboundedSender<IfEvent>| async move {
-                    let mut watcher = IfWatcher::new().await.unwrap();
-                    loop {
-                        let watcher = &mut watcher;
-                        let event = watcher.await.unwrap();
-                        if let IfEvent::Up(IpNet::V4(_)) = &event {
-                            ev.unbounded_send(event).unwrap();
-                            break;
-                        }
-                    }
-                },
-            );
+#[async_std::main]
+async fn main() -> Result<()> {
+    let mut watcher = IfWatcher::new().await?;
+    for _ in 0..10 {
+        let watcher = &mut watcher;
+        match watcher.await? {
+            IfEvent::Down(IpNet::V4(ip)) => {
+                println!("down {}", ip);
+                println!("<down {}", ip);
+            }
+            IfEvent::Up(IpNet::V4(ip)) => {
+                println!("up {}", ip);
+                println!("<up {}", ip);
+            }
+            _ => {}
         }
-
-        let mut net = net.spawn();
-        for machine in net.machines_mut() {
-            let ev = machine.recv().await;
-            assert_eq!(Some(IfEvent::Up(IpNet::V4(Ipv4Net::new(machine.addr(), 0).unwrap()))), ev);
-        }
-    });
+    }
+    Ok(())
 }
