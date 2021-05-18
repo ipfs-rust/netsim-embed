@@ -2,7 +2,7 @@ use futures::channel::mpsc;
 use futures::future::Future;
 use futures::stream::Stream;
 use netsim_embed_core::{Ipv4Route, Plug};
-use pnet_packet::ipv4::Ipv4Packet;
+use libpacket::ipv4::Ipv4Packet;
 use std::net::Ipv4Addr;
 use std::pin::Pin;
 use std::task::{Context, Poll};

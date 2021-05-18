@@ -7,7 +7,7 @@ pub use netsim_embed_machine::namespace;
 use netsim_embed_machine::*;
 use netsim_embed_nat::*;
 use netsim_embed_router::*;
-pub use pnet_packet::*;
+pub use libpacket::*;
 use std::fmt::Display;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
