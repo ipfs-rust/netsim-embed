@@ -15,10 +15,13 @@ pub mod iface;
 pub mod namespace;
 
 use async_process::Command;
-use futures::channel::mpsc;
-use futures::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use futures::sink::SinkExt;
 use futures::stream::StreamExt;
+use futures::{channel::mpsc, future::BoxFuture};
+use futures::{
+    channel::oneshot,
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+};
+use futures::{sink::SinkExt, Future};
 use netsim_embed_core::{Ipv4Range, Packet, Plug};
 use std::fmt::Display;
 use std::io::Write;
@@ -141,4 +144,89 @@ where
             .await;
         })
     })
+}
+
+pub struct Host {
+    _thread_handle: thread::JoinHandle<()>,
+    tx: mpsc::UnboundedSender<BoxFuture<'static, ()>>,
+}
+impl Host {
+    /// Spawn a future onto a dedicated thread, which runs within the configured
+    /// networks namespace.
+    pub async fn run<U: Send + 'static + std::fmt::Debug>(
+        &mut self,
+        f: impl Future<Output = U> + Send + 'static,
+    ) -> anyhow::Result<U> {
+        let (tx_exec, rx_exec) = oneshot::channel();
+        self.tx
+            .send(Box::pin(async move {
+                let res = f.await;
+                tx_exec.send(res).unwrap();
+            }))
+            .await?;
+        Ok(rx_exec.await.unwrap())
+    }
+    pub fn new(addr: Ipv4Addr, mask: u8, plug: Plug) -> Self {
+        let (exec_tx, mut exec_rx) = mpsc::unbounded();
+        let thread_handle = thread::spawn(move || {
+            tracing::trace!("spawning host with addr {}", addr);
+            namespace::unshare_network().unwrap();
+
+            async_global_executor::block_on(async move {
+                let iface = iface::Iface::new().unwrap();
+                iface.set_ipv4_addr(addr, mask).unwrap();
+                iface.put_up().unwrap();
+                iface.add_ipv4_route(Ipv4Range::global().into()).unwrap();
+
+                let iface = async_io::Async::new(iface).unwrap();
+                let (mut tx, mut rx) = plug.split();
+
+                let reader_task = async {
+                    loop {
+                        let mut buf = [0; libc::ETH_FRAME_LEN as usize];
+                        let n = iface.read_with(|iface| iface.recv(&mut buf)).await.unwrap();
+                        if n == 0 {
+                            break;
+                        }
+                        // drop ipv6 packets
+                        if buf[0] >> 4 != 4 {
+                            continue;
+                        }
+                        log::debug!("machine {}: sending packet", addr);
+                        let mut bytes = buf[..n].to_vec();
+                        if let Some(mut packet) = Packet::new(&mut bytes) {
+                            packet.set_checksum();
+                        }
+                        if tx.send(bytes).await.is_err() {
+                            break;
+                        }
+                    }
+                };
+
+                let writer_task = async {
+                    while let Some(packet) = rx.next().await {
+                        log::debug!("machine {}: received packet", addr);
+                        // can error if the interface is down
+                        if let Ok(n) = iface.write_with(|iface| iface.send(&packet)).await {
+                            if n == 0 {
+                                break;
+                            }
+                        }
+                    }
+                };
+
+                let exec_task = async {
+                    while let Some(fut) = exec_rx.next().await {
+                        fut.await;
+                    }
+                };
+
+                futures::future::join3(reader_task, writer_task, exec_task).await;
+            })
+        });
+        Self {
+            tx: exec_tx,
+            _thread_handle: thread_handle,
+        }
+    }
 }

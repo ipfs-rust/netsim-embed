@@ -158,6 +158,18 @@ where
         self.router.add_connection(iface_a, vec![addr.into()]);
     }
 
+    /// Creates a [`Host`] struct, which can be used to spawn futures to be run
+    /// in a dedicated thread scoped to this network's namespace.
+    pub fn spawn_host(&mut self, addr: Option<Ipv4Addr>) -> Host {
+        let (iface_a, iface_b) = Wire::default().spawn();
+        let addr = addr.unwrap_or_else(|| self.random_client_addr());
+        let mask = self.range.netmask_prefix_length();
+        let host = Host::new(addr, mask, iface_b);
+
+        self.router.add_connection(iface_a, vec![addr.into()]);
+        host
+    }
+
     pub fn spawn_network(&mut self, config: Option<NatConfig>, mut builder: NetworkBuilder<C, E>) {
         let (net_a, net_b) = wire();
         if let Some(config) = config {

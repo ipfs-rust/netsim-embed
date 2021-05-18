@@ -23,8 +23,10 @@ impl Display for HelloWorld {
 }
 fn main() {
     run(async {
+        env_logger::init();
         let mut net = NetworkBuilder::<HelloWorld, HelloWorld>::new(Ipv4Range::global());
         let server_addr = net.random_client_addr();
+        println!("Server Addr {}:4242", server_addr.to_string());
         let mut server = Command::new("nc");
         server.args(&["-l", "-4", "-p", "4242"]);
 
