@@ -24,6 +24,7 @@ where
 pub struct Machine<C, E> {
     id: u64,
     addr: Ipv4Addr,
+    mask: u8,
     ctrl: mpsc::Sender<IfaceCtrl>,
     tx: mpsc::UnboundedSender<C>,
     rx: mpsc::UnboundedReceiver<E>,
@@ -36,6 +37,14 @@ impl<C: Send + 'static, E: Send + 'static> Machine<C, E> {
 
     pub fn addr(&self) -> Ipv4Addr {
         self.addr
+    }
+
+    pub async fn set_addr(&mut self, addr: Ipv4Addr) {
+        self.ctrl
+            .send(IfaceCtrl::SetAddr(addr, self.mask))
+            .await
+            .unwrap();
+        self.addr = addr;
     }
 
     pub async fn send(&mut self, cmd: C) {
@@ -150,6 +159,7 @@ where
         let machine = Machine {
             id: self.machines.len() as _,
             addr,
+            mask,
             ctrl: ctrl_tx,
             tx: cmd_tx,
             rx: event_rx,

@@ -625,6 +625,7 @@ dependencies = [
  "async-process",
  "async-std",
  "async-trait",
+ "env_logger",
  "futures",
  "if-watch",
  "ipnet",

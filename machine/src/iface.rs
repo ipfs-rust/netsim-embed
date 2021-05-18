@@ -176,7 +176,7 @@ impl Iface {
         })
     }
 
-    /// Set an interface IPv4 address and netmask
+    /// Set an interface IPv4 address and netmask.
     pub fn set_ipv4_addr(&self, ipv4_addr: Ipv4Addr, netmask_bits: u8) -> Result<(), io::Error> {
         unsafe {
             let fd = errno!(libc::socket(
@@ -195,12 +195,9 @@ impl Iface {
             let netmask = Ipv4Addr::from(!((!0u32) >> netmask_bits));
             req.set_ifru_addr(netmask);
 
-            if let Err(err) = errno!(ioctl::siocsifnetmask(fd, &req)) {
-                let _ = libc::close(fd);
-                return Err(err);
-            }
-
+            let res = errno!(ioctl::siocsifnetmask(fd, &req));
             let _ = libc::close(fd);
+            res?;
             Ok(())
         }
     }
@@ -222,12 +219,9 @@ impl Iface {
 
             req.ifr_ifru.ifru_flags |= libc::IFF_UP as i16 | libc::IFF_RUNNING as i16;
 
-            if let Err(err) = errno!(ioctl::siocsifflags(fd, &req)) {
-                let _ = libc::close(fd);
-                return Err(err);
-            }
-
+            let res = errno!(ioctl::siocsifflags(fd, &req));
             let _ = libc::close(fd);
+            res?;
             Ok(())
         }
     }
@@ -247,14 +241,11 @@ impl Iface {
                 return Err(err);
             }
 
-            req.ifr_ifru.ifru_flags &= !(libc::IFF_UP as i16 | libc::IFF_RUNNING as i16);
+            req.ifr_ifru.ifru_flags &= !(libc::IFF_UP as i16);
 
-            if let Err(err) = errno!(ioctl::siocsifflags(fd, &req)) {
-                let _ = libc::close(fd);
-                return Err(err);
-            }
-
+            let res = errno!(ioctl::siocsifflags(fd, &req));
             let _ = libc::close(fd);
+            res?;
             Ok(())
         }
     }

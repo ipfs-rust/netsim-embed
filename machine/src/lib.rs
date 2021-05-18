@@ -31,6 +31,7 @@ use std::thread;
 pub enum IfaceCtrl {
     Up,
     Down,
+    SetAddr(Ipv4Addr, u8),
 }
 
 /// Spawns a thread in a new network namespace and configures a TUN interface that sends and
@@ -67,6 +68,9 @@ where
                     match ctrl {
                         IfaceCtrl::Up => iface.get_ref().put_up().unwrap(),
                         IfaceCtrl::Down => iface.get_ref().put_down().unwrap(),
+                        IfaceCtrl::SetAddr(addr, mask) => {
+                            iface.get_ref().set_ipv4_addr(addr, mask).unwrap();
+                        }
                     }
                 }
             };

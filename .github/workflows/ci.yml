@@ -64,7 +64,7 @@ jobs:
       run: cd ./target/debug && ./netsim-embed-cli --client ./examples/iperf_client --server ./examples/iperf_server --topology m2
 
     - name: Run ifwatch example
-      run: cd ./target/debug && ./netsim-embed-cli --server ./examples/if_watch --topology m1
+      run: cd ./target/debug/examples/if_watch_runner
 
   lint-rust:
     runs-on: ubuntu-latest

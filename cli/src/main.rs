@@ -9,7 +9,7 @@ pub struct Opts {
     #[structopt(long)]
     topology: String,
     #[structopt(long)]
-    client: Option<PathBuf>,
+    client: PathBuf,
     #[structopt(long)]
     server: PathBuf,
     #[structopt(long)]
@@ -32,23 +32,18 @@ fn main() {
             wire.set_delay(Duration::from_millis(delay));
             wire.set_buffer_size(u64::MAX as usize);
         }
+        let mut client = async_process::Command::new(opts.client);
+        client.arg(addr.to_string());
         match opts.topology.as_str() {
-            "m1" => {}
             "m2" => {
-                let mut client = async_process::Command::new(opts.client.unwrap());
-                client.arg(addr.to_string());
                 net.spawn_machine(wire, None, client);
             }
             "m1m1" => {
-                let mut client = async_process::Command::new(opts.client.unwrap());
-                client.arg(addr.to_string());
                 let mut net2 = NetworkBuilder::new(Ipv4Range::global());
                 net2.spawn_machine(wire, None, client);
                 net.spawn_network(None, net2);
             }
             "m1nm1" => {
-                let mut client = async_process::Command::new(opts.client.unwrap());
-                client.arg(addr.to_string());
                 let mut net2 = NetworkBuilder::new(Ipv4Range::global());
                 net2.spawn_machine(wire, None, client);
                 net.spawn_network(Some(Default::default()), net2);
@@ -64,24 +59,20 @@ fn main() {
             }
         }
         let client = if net.machines().len() > 1 {
-            Some(net.machine(1))
-        } else if net.subnets().len() > 1 {
-            Some(net.subnet(0).machine(0))
+            net.machine(1)
         } else {
-            None
+            net.subnet(0).machine(0)
         };
-        if let Some(client) = client {
-            client.send(Command::Start).await;
-            loop {
-                if client.recv().await == Some(Event::Started) {
-                    break;
-                }
+        client.send(Command::Start).await;
+        loop {
+            if client.recv().await == Some(Event::Started) {
+                break;
             }
-            client.send(Command::Exit).await;
-            loop {
-                if client.recv().await == Some(Event::Exited) {
-                    break;
-                }
+        }
+        client.send(Command::Exit).await;
+        loop {
+            if client.recv().await == Some(Event::Exited) {
+                break;
             }
         }
         let server = net.machine(0);
