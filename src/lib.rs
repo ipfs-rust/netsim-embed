@@ -1,13 +1,13 @@
 use async_process::Command;
 use futures::channel::mpsc;
 use futures::prelude::*;
+pub use libpacket::*;
 use netsim_embed_core::*;
 pub use netsim_embed_core::{Ipv4Range, Wire};
 pub use netsim_embed_machine::namespace;
 use netsim_embed_machine::*;
 use netsim_embed_nat::*;
 use netsim_embed_router::*;
-pub use libpacket::*;
 use std::fmt::Display;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
