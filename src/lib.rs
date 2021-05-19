@@ -3,8 +3,8 @@ use futures::prelude::*;
 pub use libpacket::*;
 use netsim_embed_core::*;
 pub use netsim_embed_core::{DelayBuffer, Ipv4Range};
-pub use netsim_embed_machine::unshare_user;
 use netsim_embed_machine::*;
+pub use netsim_embed_machine::{unshare_user, MachineId, Namespace};
 use netsim_embed_nat::*;
 use netsim_embed_router::*;
 use std::fmt::Display;
@@ -24,9 +24,6 @@ enum Connector {
     Plugged(NetworkId),
     Shutdown,
 }
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct MachineId(usize);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct NetworkId(usize);
@@ -63,6 +60,10 @@ where
         Self::default()
     }
 
+    pub fn machine(&mut self, id: MachineId) -> &mut Machine<C, E> {
+        &mut self.machines[id.0]
+    }
+
     pub fn machines(&self) -> &[Machine<C, E>] {
         &self.machines
     }
@@ -82,11 +83,11 @@ where
         } else {
             plug_b
         };
-        let id = self.machines.len();
+        let id = MachineId(self.machines.len());
         let machine = Machine::new(id, plug_b, command).await;
         self.machines.push(machine);
         self.plugs.push(Connector::Unplugged(plug_a));
-        MachineId(id)
+        id
     }
 
     pub fn network(&self, id: NetworkId) -> &Network {
@@ -95,7 +96,7 @@ where
 
     pub fn spawn_network(&mut self, range: Ipv4Range) -> NetworkId {
         let id = NetworkId(self.networks.len());
-        self.networks.push(Network::new(id.id(), range));
+        self.networks.push(Network::new(id, range));
         id
     }
 
@@ -171,18 +172,18 @@ where
 
 #[derive(Debug)]
 pub struct Network {
-    id: usize,
+    id: NetworkId,
     range: Ipv4Range,
     router: Ipv4Router,
 }
 
 impl Network {
-    fn new(id: usize, range: Ipv4Range) -> Self {
+    fn new(id: NetworkId, range: Ipv4Range) -> Self {
         let router = Ipv4Router::new(range.gateway_addr());
         Self { id, range, router }
     }
 
-    pub fn id(&self) -> usize {
+    pub fn id(&self) -> NetworkId {
         self.id
     }
 

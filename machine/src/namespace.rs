@@ -44,34 +44,17 @@ impl Namespace {
         Self::current()
     }
 
-    pub fn enter(&self) -> Result<NamespaceGuard, io::Error> {
+    pub fn enter(&self) -> Result<(), io::Error> {
         let fd = File::open(self.to_string())?;
         unsafe {
-            errno!(libc::setns(
-                fd.as_raw_fd(),
-                libc::CLONE_NEWNET | libc::CLONE_NEWUTS
-            ))?;
+            errno!(libc::setns(fd.as_raw_fd(), libc::CLONE_NEWNET))?;
         }
-        Ok(NamespaceGuard::new())
+        Ok(())
     }
 }
 
 impl std::fmt::Display for Namespace {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "/proc/{}/task/{}/ns/net", self.pid, self.tid)
-    }
-}
-
-pub struct NamespaceGuard(*mut std::ffi::c_void);
-
-impl NamespaceGuard {
-    pub fn new() -> Self {
-        Self(std::ptr::null_mut())
-    }
-}
-
-impl Drop for NamespaceGuard {
-    fn drop(&mut self) {
-        Namespace::current().unwrap().enter().unwrap();
     }
 }

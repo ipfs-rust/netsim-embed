@@ -37,11 +37,14 @@ enum IfaceCtrl {
     SetAddr(Ipv4Addr, u8),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct MachineId(pub usize);
+
 /// Spawns a thread in a new network namespace and configures a TUN interface that sends and
 /// receives IP packets from the tx/rx channels and runs some UDP/TCP networking code in task.
 #[derive(Debug)]
 pub struct Machine<C, E> {
-    id: usize,
+    id: MachineId,
     addr: Ipv4Addr,
     mask: u8,
     ns: Namespace,
@@ -57,7 +60,7 @@ where
     E: FromStr + Send + 'static,
     E::Err: std::fmt::Debug + Display + Send + Sync,
 {
-    pub async fn new(id: usize, plug: Plug, cmd: Command) -> Self {
+    pub async fn new(id: MachineId, plug: Plug, cmd: Command) -> Self {
         let (ctrl_tx, ctrl_rx) = mpsc::unbounded();
         let (cmd_tx, cmd_rx) = mpsc::unbounded();
         let (event_tx, event_rx) = mpsc::unbounded();
@@ -76,7 +79,7 @@ where
         }
     }
 
-    pub fn id(&self) -> usize {
+    pub fn id(&self) -> MachineId {
         self.id
     }
 
@@ -125,7 +128,7 @@ impl<C, E> Drop for Machine<C, E> {
 
 #[allow(clippy::too_many_arguments)]
 fn machine<C, E>(
-    id: usize,
+    id: MachineId,
     plug: Plug,
     mut bin: Command,
     mut ctrl: mpsc::UnboundedReceiver<IfaceCtrl>,
@@ -175,7 +178,7 @@ where
                     if buf[0] >> 4 != 4 {
                         continue;
                     }
-                    log::debug!("machine {}: sending packet", id);
+                    log::debug!("machine {}: sending packet", id.0);
                     let mut bytes = buf[..n].to_vec();
                     if let Some(mut packet) = Packet::new(&mut bytes) {
                         packet.set_checksum();
@@ -191,7 +194,7 @@ where
 
             let writer_task = async {
                 while let Some(packet) = rx.next().await {
-                    log::debug!("machine {}: received packet", id);
+                    log::debug!("machine {}: received packet", id.0);
                     // can error if the interface is down
                     if let Ok(n) = iface.write_with(|iface| iface.send(&packet)).await {
                         if n == 0 {
