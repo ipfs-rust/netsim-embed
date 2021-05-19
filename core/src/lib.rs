@@ -87,18 +87,19 @@ pub fn wire() -> (Plug, Plug) {
     (a, b)
 }
 
-pub struct Wire {
+#[derive(Clone, Copy, Debug)]
+pub struct DelayBuffer {
     delay: Duration,
     buffer_size: usize,
 }
 
-impl Default for Wire {
+impl Default for DelayBuffer {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Wire {
+impl DelayBuffer {
     pub fn new() -> Self {
         Self {
             delay: Duration::from_millis(0),
@@ -114,10 +115,9 @@ impl Wire {
         self.buffer_size = buffer_size;
     }
 
-    pub fn spawn(self) -> (Plug, Plug) {
+    pub fn spawn(self, mut b: Plug) -> Plug {
         #[allow(non_snake_case)]
         let DURATION_MAX: Duration = Duration::from_secs(10000);
-        let (a, mut b) = wire();
         let (mut c, d) = wire();
         async_global_executor::spawn(async move {
             let mut b_tx_buffer_size = 0;
@@ -191,7 +191,7 @@ impl Wire {
             }
         })
         .detach();
-        (a, d)
+        d
     }
 }
 

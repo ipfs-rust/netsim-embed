@@ -57,17 +57,17 @@ where
     E: FromStr + Send + 'static,
     E::Err: std::fmt::Debug + Display + Send + Sync,
 {
-    pub async fn new(id: u64, addr: Ipv4Addr, mask: u8, plug: Plug, cmd: Command) -> Self {
+    pub async fn new(id: u64, plug: Plug, cmd: Command) -> Self {
         let (ctrl_tx, ctrl_rx) = mpsc::unbounded();
         let (cmd_tx, cmd_rx) = mpsc::unbounded();
         let (event_tx, event_rx) = mpsc::unbounded();
         let (ns_tx, ns_rx) = oneshot::channel();
-        let join = machine(addr, mask, plug, cmd, ctrl_rx, ns_tx, cmd_rx, event_tx);
+        let join = machine(id, plug, cmd, ctrl_rx, ns_tx, cmd_rx, event_tx);
         let ns = ns_rx.await.unwrap();
         Self {
             id,
-            addr,
-            mask,
+            addr: Ipv4Addr::UNSPECIFIED,
+            mask: 32,
             ns,
             ctrl: ctrl_tx,
             tx: cmd_tx,
@@ -84,11 +84,16 @@ where
         self.addr
     }
 
-    pub fn set_addr(&mut self, addr: Ipv4Addr) {
+    pub fn mask(&self) -> u8 {
+        self.mask
+    }
+
+    pub fn set_addr(&mut self, addr: Ipv4Addr, mask: u8) {
         self.ctrl
-            .unbounded_send(IfaceCtrl::SetAddr(addr, self.mask))
+            .unbounded_send(IfaceCtrl::SetAddr(addr, mask))
             .unwrap();
         self.addr = addr;
+        self.mask = mask;
     }
 
     pub fn send(&mut self, cmd: C) {
@@ -120,8 +125,7 @@ impl<C, E> Drop for Machine<C, E> {
 
 #[allow(clippy::too_many_arguments)]
 fn machine<C, E>(
-    addr: Ipv4Addr,
-    mask: u8,
+    id: u64,
     plug: Plug,
     mut bin: Command,
     mut ctrl: mpsc::UnboundedReceiver<IfaceCtrl>,
@@ -135,16 +139,11 @@ where
     E::Err: std::fmt::Debug + Display + Send + Sync,
 {
     thread::spawn(move || {
-        tracing::trace!("spawning machine with addr {}", addr);
         let ns = Namespace::unshare()?;
         let _ = ns_tx.send(ns);
 
         async_global_executor::block_on(async move {
             let iface = iface::Iface::new()?;
-            iface.set_ipv4_addr(addr, mask)?;
-            iface.put_up().unwrap();
-            iface.add_ipv4_route(Ipv4Range::global().into())?;
-
             let iface = async_io::Async::new(iface)?;
             let (mut tx, mut rx) = plug.split();
 
@@ -155,6 +154,8 @@ where
                         IfaceCtrl::Down => iface.get_ref().put_down()?,
                         IfaceCtrl::SetAddr(addr, mask) => {
                             iface.get_ref().set_ipv4_addr(addr, mask)?;
+                            iface.get_ref().put_up()?;
+                            iface.get_ref().add_ipv4_route(Ipv4Range::global().into())?;
                         }
                     }
                 }
@@ -174,7 +175,7 @@ where
                     if buf[0] >> 4 != 4 {
                         continue;
                     }
-                    log::debug!("machine {}: sending packet", addr);
+                    log::debug!("machine {}: sending packet", id);
                     let mut bytes = buf[..n].to_vec();
                     if let Some(mut packet) = Packet::new(&mut bytes) {
                         packet.set_checksum();
@@ -190,7 +191,7 @@ where
 
             let writer_task = async {
                 while let Some(packet) = rx.next().await {
-                    log::debug!("machine {}: received packet", addr);
+                    log::debug!("machine {}: received packet", id);
                     // can error if the interface is down
                     if let Ok(n) = iface.write_with(|iface| iface.send(&packet)).await {
                         if n == 0 {
