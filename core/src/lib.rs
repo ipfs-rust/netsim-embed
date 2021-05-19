@@ -201,9 +201,10 @@ mod tests {
 
     #[async_std::test]
     async fn test_delay() {
-        let mut w = Wire::new();
+        let (mut a, b) = wire();
+        let mut w = DelayBuffer::new();
         w.set_delay(Duration::from_millis(100));
-        let (mut a, mut b) = w.spawn();
+        let mut b = w.spawn(b);
         let now = Instant::now();
         a.unbounded_send(vec![1]);
         a.unbounded_send(vec![2]);
