@@ -41,7 +41,7 @@ enum IfaceCtrl {
 /// receives IP packets from the tx/rx channels and runs some UDP/TCP networking code in task.
 #[derive(Debug)]
 pub struct Machine<C, E> {
-    id: u64,
+    id: usize,
     addr: Ipv4Addr,
     mask: u8,
     ns: Namespace,
@@ -57,7 +57,7 @@ where
     E: FromStr + Send + 'static,
     E::Err: std::fmt::Debug + Display + Send + Sync,
 {
-    pub async fn new(id: u64, plug: Plug, cmd: Command) -> Self {
+    pub async fn new(id: usize, plug: Plug, cmd: Command) -> Self {
         let (ctrl_tx, ctrl_rx) = mpsc::unbounded();
         let (cmd_tx, cmd_rx) = mpsc::unbounded();
         let (event_tx, event_rx) = mpsc::unbounded();
@@ -76,7 +76,7 @@ where
         }
     }
 
-    pub fn id(&self) -> u64 {
+    pub fn id(&self) -> usize {
         self.id
     }
 
@@ -96,7 +96,7 @@ where
         self.mask = mask;
     }
 
-    pub fn send(&mut self, cmd: C) {
+    pub fn send(&self, cmd: C) {
         self.tx.unbounded_send(cmd).unwrap();
     }
 
@@ -104,11 +104,11 @@ where
         self.rx.next().await
     }
 
-    pub fn up(&mut self) {
+    pub fn up(&self) {
         self.ctrl.unbounded_send(IfaceCtrl::Up).unwrap();
     }
 
-    pub fn down(&mut self) {
+    pub fn down(&self) {
         self.ctrl.unbounded_send(IfaceCtrl::Down).unwrap();
     }
 
@@ -125,7 +125,7 @@ impl<C, E> Drop for Machine<C, E> {
 
 #[allow(clippy::too_many_arguments)]
 fn machine<C, E>(
-    id: u64,
+    id: usize,
     plug: Plug,
     mut bin: Command,
     mut ctrl: mpsc::UnboundedReceiver<IfaceCtrl>,

@@ -8,8 +8,8 @@ use std::task::Poll;
 
 #[derive(Debug)]
 enum RouterCtrl {
-    AddRoute(u64, Plug, Vec<Ipv4Route>),
-    RemoveRoute(u64, oneshot::Sender<Option<Plug>>),
+    AddRoute(usize, Plug, Vec<Ipv4Route>),
+    RemoveRoute(usize, oneshot::Sender<Option<Plug>>),
 }
 
 #[derive(Debug)]
@@ -25,13 +25,13 @@ impl Ipv4Router {
         Self { addr, ctrl: tx }
     }
 
-    pub fn add_connection(&mut self, id: u64, plug: Plug, routes: Vec<Ipv4Route>) {
+    pub fn add_connection(&self, id: usize, plug: Plug, routes: Vec<Ipv4Route>) {
         self.ctrl
             .unbounded_send(RouterCtrl::AddRoute(id, plug, routes))
             .ok();
     }
 
-    pub async fn remove_connection(&mut self, id: u64) -> Option<Plug> {
+    pub async fn remove_connection(&self, id: usize) -> Option<Plug> {
         let (tx, rx) = oneshot::channel();
         self.ctrl
             .unbounded_send(RouterCtrl::RemoveRoute(id, tx))
@@ -69,7 +69,7 @@ fn router(addr: Ipv4Addr, mut ctrl: mpsc::UnboundedReceiver<RouterCtrl>) {
     }).detach()
 }
 
-async fn incoming(conns: &mut [(u64, Plug, Vec<Ipv4Route>)]) -> (usize, Option<Vec<u8>>) {
+async fn incoming(conns: &mut [(usize, Plug, Vec<Ipv4Route>)]) -> (usize, Option<Vec<u8>>) {
     if conns.is_empty() {
         poll_fn(|_| Poll::Pending).await
     } else {
@@ -84,7 +84,7 @@ async fn incoming(conns: &mut [(u64, Plug, Vec<Ipv4Route>)]) -> (usize, Option<V
     }
 }
 
-fn forward_packet(addr: Ipv4Addr, conns: &mut [(u64, Plug, Vec<Ipv4Route>)], bytes: Vec<u8>) {
+fn forward_packet(addr: Ipv4Addr, conns: &mut [(usize, Plug, Vec<Ipv4Route>)], bytes: Vec<u8>) {
     let packet = if let Some(packet) = Ipv4Packet::new(&bytes) {
         packet
     } else {
