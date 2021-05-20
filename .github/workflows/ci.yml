@@ -66,6 +66,9 @@ jobs:
     - name: Run ifwatch example
       run: ./target/debug/examples/if_watch_runner
 
+    - name: Run netcat_host example
+      run: cargo run --example netcat_host
+
   lint-rust:
     runs-on: ubuntu-latest
     steps:
