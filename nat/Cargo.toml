@@ -1,6 +1,6 @@
 [package]
 name = "netsim-embed-nat"
-version = "0.2.1"
+version = "0.4.0"
 authors = ["David Craven <david@craven.ch>"]
 edition = "2018"
 description = "Implementation of a nat for netsim embed."
@@ -10,5 +10,5 @@ repository = "https://github.com/ipfs-rust/netsim-embed"
 [dependencies]
 futures = "0.3.13"
 log = "0.4.14"
-netsim-embed-core = { version = "0.2.0", path = "../core" }
+netsim-embed-core = { version = "0.4.0", path = "../core" }
 rand = "0.8.3"
