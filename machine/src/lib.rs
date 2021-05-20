@@ -23,7 +23,7 @@ use futures::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 use netsim_embed_core::{Ipv4Range, Packet, Plug};
-use std::fmt::Display;
+use std::fmt::{self, Display};
 use std::io::{Error, ErrorKind, Result, Write};
 use std::net::Ipv4Addr;
 use std::process::Stdio;
@@ -39,6 +39,12 @@ enum IfaceCtrl {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct MachineId(pub usize);
+
+impl fmt::Display for MachineId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Machine-#{}", self.0)
+    }
+}
 
 /// Spawns a thread in a new network namespace and configures a TUN interface that sends and
 /// receives IP packets from the tx/rx channels and runs some UDP/TCP networking code in task.
@@ -147,7 +153,7 @@ where
         let ns = Namespace::unshare()?;
         let _ = ns_tx.send(ns);
 
-        async_global_executor::block_on(async move {
+        let res = async_global_executor::block_on(async move {
             let iface = iface::Iface::new()?;
             let iface = async_io::Async::new(iface)?;
             let (mut tx, mut rx) = plug.split();
@@ -257,6 +263,8 @@ where
             }
             child.status().await.unwrap();
             Ok(())
-        })
+        });
+        tracing::info!("{}'s event loop yielded with {:?}", id, res);
+        res
     })
 }

@@ -9,8 +9,8 @@ fn main() {
         env_logger::init();
         let mut netsim = Netsim::<String, String>::new();
         let net1 = netsim.spawn_network(Ipv4Range::global());
-        let mut server = Command::new("nc");
-        server.args(&["-l", "-4", "-p", "4242", "-c", "echo -e '<Hello World'"]);
+        let mut server = Command::new("ncat");
+        server.args(&["-l", "-4", "-p", "4242", "-c", "echo '<Hello World'"]);
 
         let server = netsim.spawn_machine(server, None).await;
         netsim.plug(server, net1, None).await;
@@ -21,12 +21,12 @@ fn main() {
             let mut cmd = Command::new("nc");
 
             cmd.args(&["-4", &*server_addr.to_string(), "4242"]);
-            cmd.stdout(Stdio::piped());
+            cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
             let mut child = cmd.spawn().unwrap();
             println!("Spawned child");
             let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines().fuse();
             let line = stdout.next().await.unwrap()?;
-            child.kill()?;
+            let _ = child.kill();
 
             Result::<_, anyhow::Error>::Ok(line)
         };
