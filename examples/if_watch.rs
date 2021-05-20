@@ -5,7 +5,7 @@ use ipnet::IpNet;
 #[async_std::main]
 async fn main() -> Result<()> {
     let mut watcher = IfWatcher::new().await?;
-    for _ in 0..10 {
+    for _ in 0..12 {
         let watcher = &mut watcher;
         match watcher.await? {
             IfEvent::Down(IpNet::V4(ip)) => {

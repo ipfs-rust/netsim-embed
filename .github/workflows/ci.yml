@@ -31,7 +31,7 @@ jobs:
 
     - name: Install dependencies ubuntu
       if: matrix.platform.host == 'ubuntu-latest'
-      run: sudo apt-get install iperf net-tools
+      run: sudo apt-get install iperf net-tools ncat
 
     - name: Install rust toolchain
       uses: hecrj/setup-rust-action@v1
@@ -65,6 +65,9 @@ jobs:
 
     - name: Run ifwatch example
       run: ./target/debug/examples/if_watch_runner
+
+    - name: Run netcat_host example
+      run: ./target/debug/examples/netcat_host
 
   lint-rust:
     runs-on: ubuntu-latest

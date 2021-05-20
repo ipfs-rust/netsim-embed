@@ -39,6 +39,10 @@ fn main() {
         sim.plug(pinger, net, None).await;
         assert_eq!(
             sim.machine(watcher).recv().await,
+            Some("<up 127.0.0.1/8".into())
+        );
+        assert_eq!(
+            sim.machine(watcher).recv().await,
             Some(format!("<up {}/0", addr1))
         );
         ping(sim.machine(pinger).namespace(), addr1).await;
