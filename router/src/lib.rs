@@ -1,90 +1,109 @@
-use futures::channel::mpsc;
-use futures::future::Future;
-use futures::stream::Stream;
+use futures::channel::{mpsc, oneshot};
+use futures::future::{poll_fn, FutureExt};
+use futures::stream::{FuturesUnordered, StreamExt};
 use libpacket::ipv4::Ipv4Packet;
 use netsim_embed_core::{Ipv4Route, Plug};
 use std::net::Ipv4Addr;
-use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::task::Poll;
+
+#[derive(Debug)]
+enum RouterCtrl {
+    AddRoute(usize, Plug, Vec<Ipv4Route>),
+    RemoveRoute(usize, oneshot::Sender<Option<Plug>>),
+}
 
 #[derive(Debug)]
 pub struct Ipv4Router {
     addr: Ipv4Addr,
-    rxs: Vec<mpsc::UnboundedReceiver<Vec<u8>>>,
-    txs: Vec<(mpsc::UnboundedSender<Vec<u8>>, Vec<Ipv4Route>)>,
+    ctrl: mpsc::UnboundedSender<RouterCtrl>,
 }
 
 impl Ipv4Router {
     pub fn new(addr: Ipv4Addr) -> Self {
-        Self {
-            addr,
-            rxs: Default::default(),
-            txs: Default::default(),
-        }
+        let (tx, rx) = mpsc::unbounded();
+        router(addr, rx);
+        Self { addr, ctrl: tx }
     }
 
-    pub fn add_connection(&mut self, plug: Plug, routes: Vec<Ipv4Route>) {
-        let (tx, rx) = plug.split();
-        self.rxs.push(rx);
-        self.txs.push((tx, routes));
+    pub fn add_connection(&self, id: usize, plug: Plug, routes: Vec<Ipv4Route>) {
+        self.ctrl
+            .unbounded_send(RouterCtrl::AddRoute(id, plug, routes))
+            .ok();
     }
 
-    fn process_packet(&mut self, bytes: Vec<u8>) {
-        let packet = if let Some(packet) = Ipv4Packet::new(&bytes) {
-            packet
-        } else {
-            log::info!("router {}: dropping invalid ipv4 packet", self.addr);
-            return;
-        };
-        let dest = packet.get_destination();
-        if dest == self.addr {
-            log::info!("router {}: dropping packet addressed to me", self.addr);
-            return;
-        }
-        for (tx, routes) in &self.txs {
-            for route in routes {
-                if route.dest().contains(dest) || dest.is_broadcast() || dest.is_multicast() {
-                    log::debug!("router {}: routing packet on route {:?}", self.addr, route);
-                    let _ = tx.unbounded_send(bytes);
-                    return;
-                }
-            }
-        }
-        log::info!(
-            "router {}: dropping unroutable packet to {}",
-            self.addr,
-            dest
-        );
+    pub async fn remove_connection(&self, id: usize) -> Option<Plug> {
+        let (tx, rx) = oneshot::channel();
+        self.ctrl
+            .unbounded_send(RouterCtrl::RemoveRoute(id, tx))
+            .unwrap();
+        rx.await.unwrap()
     }
 }
 
-impl Future for Ipv4Router {
-    type Output = ();
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-        let mut i = 0;
-        while i < self.rxs.len() {
-            loop {
-                let packet = match Pin::new(&mut self.rxs[i]).poll_next(cx) {
-                    Poll::Pending => {
-                        i += 1;
-                        break;
+fn router(addr: Ipv4Addr, mut ctrl: mpsc::UnboundedReceiver<RouterCtrl>) {
+    async_global_executor::spawn(async move {
+        let mut conns = vec![];
+        loop {
+            futures::select! {
+                ctrl = ctrl.next() => match ctrl {
+                    Some(RouterCtrl::AddRoute(id, plug, routes)) => {
+                        conns.push((id, plug, routes));
                     }
-                    Poll::Ready(None) => {
-                        self.rxs.remove(i);
-                        self.txs.remove(i);
-                        break;
+                    Some(RouterCtrl::RemoveRoute(id, ch)) => {
+                        let plug = if let Some(idx) = conns.iter().position(|(id2, _, _)| *id2 == id) {
+                            let (_, plug, _) = conns.swap_remove(idx);
+                            Some(plug)
+                        } else {
+                            None
+                        };
+                        ch.send(plug).ok();
                     }
-                    Poll::Ready(Some(packet)) => packet,
-                };
-                self.process_packet(packet)
+                    None => break,
+                },
+                incoming = incoming(&mut conns).fuse() => match incoming {
+                    (_, Some(packet)) => forward_packet(addr, &mut conns, packet),
+                    (i, None) => { conns.swap_remove(i); }
+                }
             }
         }
+    }).detach()
+}
 
-        if self.rxs.is_empty() {
-            return Poll::Ready(());
-        }
-
-        Poll::Pending
+async fn incoming(conns: &mut [(usize, Plug, Vec<Ipv4Route>)]) -> (usize, Option<Vec<u8>>) {
+    if conns.is_empty() {
+        poll_fn(|_| Poll::Pending).await
+    } else {
+        conns
+            .iter_mut()
+            .enumerate()
+            .map(|(i, (_, plug, _))| async move { (i, plug.incoming().await) })
+            .collect::<FuturesUnordered<_>>()
+            .next()
+            .await
+            .unwrap()
     }
+}
+
+fn forward_packet(addr: Ipv4Addr, conns: &mut [(usize, Plug, Vec<Ipv4Route>)], bytes: Vec<u8>) {
+    let packet = if let Some(packet) = Ipv4Packet::new(&bytes) {
+        packet
+    } else {
+        log::info!("router {}: dropping invalid ipv4 packet", addr);
+        return;
+    };
+    let dest = packet.get_destination();
+    if dest == addr {
+        log::info!("router {}: dropping packet addressed to me", addr);
+        return;
+    }
+    for (_, tx, routes) in conns {
+        for route in routes {
+            if route.dest().contains(dest) || dest.is_broadcast() || dest.is_multicast() {
+                log::debug!("router {}: routing packet on route {:?}", addr, route);
+                let _ = tx.unbounded_send(bytes);
+                return;
+            }
+        }
+    }
+    log::info!("router {}: dropping unroutable packet to {}", addr, dest);
 }

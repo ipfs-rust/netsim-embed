@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::{self, Write};
+use std::os::unix::io::AsRawFd;
 
 pub fn unshare_user() -> Result<(), io::Error> {
     let uid = unsafe { libc::geteuid() };
@@ -21,16 +22,39 @@ pub fn unshare_user() -> Result<(), io::Error> {
     Ok(())
 }
 
-pub fn unshare_network() -> Result<(), io::Error> {
-    unsafe {
-        errno!(libc::unshare(libc::CLONE_NEWNET | libc::CLONE_NEWUTS))?;
-        let pid = errno!(libc::getpid())?;
-        let tid = errno!(libc::syscall(libc::SYS_gettid))?;
-        log::info!(
-            "created network namespace: /proc/{}/task/{}/ns/net",
-            pid,
-            tid
-        );
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct Namespace {
+    pid: i32,
+    tid: i64,
+}
+
+impl Namespace {
+    pub fn current() -> Result<Self, io::Error> {
+        unsafe {
+            let pid = errno!(libc::getpid())?;
+            let tid = errno!(libc::syscall(libc::SYS_gettid))?;
+            Ok(Self { pid, tid })
+        }
+    }
+
+    pub fn unshare() -> Result<Self, io::Error> {
+        unsafe {
+            errno!(libc::unshare(libc::CLONE_NEWNET | libc::CLONE_NEWUTS))?;
+        }
+        Self::current()
+    }
+
+    pub fn enter(&self) -> Result<(), io::Error> {
+        let fd = File::open(self.to_string())?;
+        unsafe {
+            errno!(libc::setns(fd.as_raw_fd(), libc::CLONE_NEWNET))?;
+        }
         Ok(())
+    }
+}
+
+impl std::fmt::Display for Namespace {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "/proc/{}/task/{}/ns/net", self.pid, self.tid)
     }
 }

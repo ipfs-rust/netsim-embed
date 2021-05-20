@@ -1,11 +1,10 @@
 use async_process::Command;
-use futures::channel::mpsc;
 use futures::prelude::*;
 pub use libpacket::*;
 use netsim_embed_core::*;
-pub use netsim_embed_core::{Ipv4Range, Wire};
-pub use netsim_embed_machine::namespace;
+pub use netsim_embed_core::{DelayBuffer, Ipv4Range};
 use netsim_embed_machine::*;
+pub use netsim_embed_machine::{unshare_user, MachineId, Namespace};
 use netsim_embed_nat::*;
 use netsim_embed_router::*;
 use std::fmt::Display;
@@ -16,80 +15,53 @@ pub fn run<F>(f: F)
 where
     F: Future<Output = ()> + Send + 'static,
 {
-    namespace::unshare_user().unwrap();
+    unshare_user().unwrap();
     async_global_executor::block_on(f);
 }
 
-#[derive(Debug)]
-pub struct Machine<C, E> {
-    id: u64,
-    addr: Ipv4Addr,
-    mask: u8,
-    ctrl: mpsc::Sender<IfaceCtrl>,
-    tx: mpsc::UnboundedSender<C>,
-    rx: mpsc::UnboundedReceiver<E>,
+enum Connector {
+    Unplugged(Plug),
+    Plugged(NetworkId),
+    Shutdown,
 }
 
-impl<C: Send + 'static, E: Send + 'static> Machine<C, E> {
-    pub fn id(&self) -> u64 {
-        self.id
-    }
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct NetworkId(usize);
 
-    pub fn addr(&self) -> Ipv4Addr {
-        self.addr
-    }
-
-    pub async fn set_addr(&mut self, addr: Ipv4Addr) {
-        self.ctrl
-            .send(IfaceCtrl::SetAddr(addr, self.mask))
-            .await
-            .unwrap();
-        self.addr = addr;
-    }
-
-    pub async fn send(&mut self, cmd: C) {
-        self.tx.send(cmd).await.unwrap();
-    }
-
-    pub async fn recv(&mut self) -> Option<E> {
-        self.rx.next().await
-    }
-
-    pub async fn up(&mut self) {
-        self.ctrl.send(IfaceCtrl::Up).await.unwrap();
-    }
-
-    pub async fn down(&mut self) {
-        self.ctrl.send(IfaceCtrl::Down).await.unwrap();
+impl NetworkId {
+    fn id(&self) -> usize {
+        self.0 + u16::MAX as usize
     }
 }
 
-#[derive(Debug)]
-pub struct Network<C, E> {
-    range: Ipv4Range,
+pub struct Netsim<C, E> {
     machines: Vec<Machine<C, E>>,
-    networks: Vec<Network<C, E>>,
+    plugs: Vec<Connector>,
+    networks: Vec<Network>,
 }
 
-impl<C: Send + 'static, E: Send + 'static> Network<C, E> {
-    pub fn range(&self) -> Ipv4Range {
-        self.range
+impl<C, E> Default for Netsim<C, E> {
+    fn default() -> Self {
+        Self {
+            machines: Default::default(),
+            plugs: Default::default(),
+            networks: Default::default(),
+        }
+    }
+}
+
+impl<C, E> Netsim<C, E>
+where
+    C: Display + Send + 'static,
+    E: FromStr + Send + 'static,
+    E::Err: std::fmt::Debug + Display + Send + Sync,
+{
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    pub fn subnet(&mut self, i: usize) -> &mut Network<C, E> {
-        self.networks.get_mut(i).unwrap()
-    }
-
-    pub fn subnets(&self) -> &[Network<C, E>] {
-        &self.networks
-    }
-
-    pub fn subnets_mut(&mut self) -> &mut [Network<C, E>] {
-        &mut self.networks
-    }
-
-    pub fn machine(&mut self, i: usize) -> &mut Machine<C, E> {
-        self.machines.get_mut(i).unwrap()
+    pub fn machine(&mut self, id: MachineId) -> &mut Machine<C, E> {
+        &mut self.machines[id.0]
     }
 
     pub fn machines(&self) -> &[Machine<C, E>] {
@@ -98,6 +70,129 @@ impl<C: Send + 'static, E: Send + 'static> Network<C, E> {
 
     pub fn machines_mut(&mut self) -> &mut [Machine<C, E>] {
         &mut self.machines
+    }
+
+    pub async fn spawn_machine(
+        &mut self,
+        command: Command,
+        delay: Option<DelayBuffer>,
+    ) -> MachineId {
+        let (plug_a, plug_b) = wire();
+        let plug_b = if let Some(delay) = delay {
+            delay.spawn(plug_b)
+        } else {
+            plug_b
+        };
+        let id = MachineId(self.machines.len());
+        let machine = Machine::new(id, plug_b, command).await;
+        self.machines.push(machine);
+        self.plugs.push(Connector::Unplugged(plug_a));
+        id
+    }
+
+    pub fn network(&self, id: NetworkId) -> &Network {
+        &self.networks[id.0]
+    }
+
+    pub fn spawn_network(&mut self, range: Ipv4Range) -> NetworkId {
+        let id = NetworkId(self.networks.len());
+        self.networks.push(Network::new(id, range));
+        id
+    }
+
+    pub async fn plug(&mut self, machine: MachineId, net: NetworkId, addr: Option<Ipv4Addr>) {
+        if let Connector::Plugged(_) = self.plugs[machine.0] {
+            self.unplug(machine).await
+        }
+        let plug = std::mem::replace(&mut self.plugs[machine.0], Connector::Plugged(net));
+        if let Connector::Unplugged(plug) = plug {
+            let net = &self.networks[net.0];
+            let addr = addr.unwrap_or_else(|| net.random_addr());
+            let mask = net.range.netmask_prefix_length();
+            net.router
+                .add_connection(machine.0, plug, vec![addr.into()]);
+            self.machines[machine.0].set_addr(addr, mask).await;
+        }
+    }
+
+    pub async fn unplug(&mut self, machine: MachineId) {
+        if let Connector::Plugged(net) = self.plugs[machine.0] {
+            self.plugs[machine.0] = if let Some(plug) = self.networks[net.0]
+                .router
+                .remove_connection(machine.0)
+                .await
+            {
+                Connector::Unplugged(plug)
+            } else {
+                Connector::Shutdown
+            };
+        }
+    }
+
+    pub fn add_route(&mut self, net_a: NetworkId, net_b: NetworkId) {
+        let (plug_a, plug_b) = wire();
+        let range_a = self.networks[net_a.0].range;
+        let range_b = self.networks[net_b.0].range;
+        self.networks[net_a.0]
+            .router
+            .add_connection(net_b.id(), plug_b, vec![range_b.into()]);
+        self.networks[net_b.0]
+            .router
+            .add_connection(net_a.id(), plug_a, vec![range_a.into()]);
+    }
+
+    pub fn add_nat_route(
+        &mut self,
+        config: NatConfig,
+        public_net: NetworkId,
+        private_net: NetworkId,
+    ) {
+        let (public, nat_public) = wire();
+        let (nat_private, private) = wire();
+        let nat_addr = self.networks[public_net.0].random_addr();
+        let nat_range = self.networks[private_net.0].range;
+        let mut nat = Ipv4Nat::new(nat_public, nat_private, nat_addr, nat_range);
+        nat.set_hair_pinning(config.hair_pinning);
+        nat.set_symmetric(config.symmetric);
+        nat.set_blacklist_unrecognized_addrs(config.blacklist_unrecognized_addrs);
+        nat.set_restrict_endpoints(config.restrict_endpoints);
+        async_global_executor::spawn(nat).detach();
+        self.networks[public_net.0].router.add_connection(
+            private_net.id(),
+            public,
+            vec![nat_range.into()],
+        );
+        self.networks[private_net.0].router.add_connection(
+            public_net.id(),
+            private,
+            vec![Ipv4Range::global().into()],
+        );
+    }
+}
+
+#[derive(Debug)]
+pub struct Network {
+    id: NetworkId,
+    range: Ipv4Range,
+    router: Ipv4Router,
+}
+
+impl Network {
+    fn new(id: NetworkId, range: Ipv4Range) -> Self {
+        let router = Ipv4Router::new(range.gateway_addr());
+        Self { id, range, router }
+    }
+
+    pub fn id(&self) -> NetworkId {
+        self.id
+    }
+
+    pub fn range(&self) -> Ipv4Range {
+        self.range
+    }
+
+    pub fn random_addr(&self) -> Ipv4Addr {
+        self.range.random_client_addr()
     }
 }
 
@@ -116,96 +211,6 @@ impl Default for NatConfig {
             symmetric: false,
             blacklist_unrecognized_addrs: false,
             restrict_endpoints: false,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct NetworkBuilder<C, E> {
-    range: Ipv4Range,
-    router: Ipv4Router,
-    machines: Vec<Machine<C, E>>,
-    networks: Vec<Network<C, E>>,
-}
-
-impl<C, E> NetworkBuilder<C, E>
-where
-    C: Display + Send + 'static,
-    E: FromStr + Send + 'static,
-    E::Err: std::fmt::Debug + Send,
-{
-    pub fn new(range: Ipv4Range) -> Self {
-        let router = Ipv4Router::new(range.gateway_addr());
-        Self {
-            range,
-            router,
-            machines: Default::default(),
-            networks: Default::default(),
-        }
-    }
-
-    pub fn random_client_addr(&self) -> Ipv4Addr {
-        self.range.random_client_addr()
-    }
-
-    pub fn spawn_machine(&mut self, config: Wire, addr: Option<Ipv4Addr>, command: Command) {
-        let (iface_a, iface_b) = config.spawn();
-        let (ctrl_tx, ctrl_rx) = mpsc::channel(1);
-        let (cmd_tx, cmd_rx) = mpsc::unbounded();
-        let (event_tx, event_rx) = mpsc::unbounded();
-        let addr = addr.unwrap_or_else(|| self.random_client_addr());
-        let mask = self.range.netmask_prefix_length();
-        let _ = machine(addr, mask, iface_b, command, ctrl_rx, cmd_rx, event_tx);
-        let machine = Machine {
-            id: self.machines.len() as _,
-            addr,
-            mask,
-            ctrl: ctrl_tx,
-            tx: cmd_tx,
-            rx: event_rx,
-        };
-        self.machines.push(machine);
-        self.router.add_connection(iface_a, vec![addr.into()]);
-    }
-
-    pub fn spawn_network(&mut self, config: Option<NatConfig>, mut builder: NetworkBuilder<C, E>) {
-        let (net_a, net_b) = wire();
-        if let Some(config) = config {
-            builder
-                .router
-                .add_connection(net_b, vec![Ipv4Range::global().into()]);
-            let (nat_a, nat_b) = wire();
-            let nat_addr = self.range.random_client_addr();
-            let mut nat = Ipv4Nat::new(nat_b, net_a, nat_addr, builder.range);
-            nat.set_hair_pinning(config.hair_pinning);
-            nat.set_symmetric(config.symmetric);
-            nat.set_blacklist_unrecognized_addrs(config.blacklist_unrecognized_addrs);
-            nat.set_restrict_endpoints(config.restrict_endpoints);
-            async_global_executor::spawn(nat).detach();
-            self.router.add_connection(nat_a, vec![nat_addr.into()]);
-        } else {
-            builder
-                .router
-                .add_connection(net_b, vec![Ipv4Range::global().into()]);
-            self.router
-                .add_connection(net_a, vec![builder.range.into()]);
-        }
-        let network = builder.spawn();
-        self.networks.push(network);
-    }
-
-    pub fn spawn(self) -> Network<C, E> {
-        let Self {
-            range,
-            router,
-            machines,
-            networks,
-        } = self;
-        async_global_executor::spawn(router).detach();
-        Network {
-            range,
-            machines,
-            networks,
         }
     }
 }

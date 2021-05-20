@@ -257,8 +257,7 @@ impl Iface {
                 libc::PF_INET as i32,
                 libc::SOCK_DGRAM as i32,
                 libc::IPPROTO_IP as i32,
-            ))
-            .unwrap();
+            ))?;
 
             let mut rtentry: libc::rtentry = mem::zeroed();
 
@@ -291,7 +290,7 @@ impl Iface {
 
             if let Err(err) = errno!(libc::ioctl(fd, libc::SIOCADDRT, &rtentry)) {
                 let _ = libc::close(fd);
-                return Err(err).unwrap();
+                return Err(err);
             }
 
             Ok(())
