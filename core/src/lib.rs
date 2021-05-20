@@ -32,7 +32,7 @@ impl Ipv4Route {
         self.dest
     }
 
-    /// Returns the route's gateway (if ayn).
+    /// Returns the route's gateway (if any).
     pub fn gateway(&self) -> Option<Ipv4Addr> {
         self.gateway
     }

@@ -121,6 +121,32 @@ impl Write for Iface {
 impl Iface {
     /// Creates a new virtual network interface.
     pub fn new() -> Result<Self, io::Error> {
+        // create loopback interface
+        unsafe {
+            let fd = errno!(libc::socket(
+                libc::AF_INET as i32,
+                libc::SOCK_STREAM as i32,
+                0
+            ))?;
+            let lo = CString::new("lo")?;
+
+            let mut req = ioctl::ifreq::new(&lo);
+            req.set_ifru_addr(Ipv4Addr::LOCALHOST);
+
+            if let Err(err) = errno!(ioctl::siocsifaddr(fd, &req)) {
+                let _ = libc::close(fd);
+                return Err(err);
+            }
+
+            let mut req = ioctl::ifreq::new(&lo);
+            req.ifr_ifru.ifru_flags |=
+                libc::IFF_UP as i16 | libc::IFF_LOOPBACK as i16 | libc::IFF_RUNNING as i16;
+
+            let res = errno!(ioctl::siocsifflags(fd, &req));
+            let _ = libc::close(fd);
+            res?;
+        }
+        // create tun interface
         unsafe {
             let fd = loop {
                 match errno!(libc::open(
