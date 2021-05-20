@@ -111,7 +111,7 @@ where
             let mask = net.range.netmask_prefix_length();
             net.router
                 .add_connection(machine.0, plug, vec![addr.into()]);
-            self.machines[machine.0].set_addr(addr, mask);
+            self.machines[machine.0].set_addr(addr, mask).await;
         }
     }
 

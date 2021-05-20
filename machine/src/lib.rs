@@ -34,7 +34,7 @@ use std::thread;
 enum IfaceCtrl {
     Up,
     Down,
-    SetAddr(Ipv4Addr, u8),
+    SetAddr(Ipv4Addr, u8, oneshot::Sender<()>),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -91,10 +91,12 @@ where
         self.mask
     }
 
-    pub fn set_addr(&mut self, addr: Ipv4Addr, mask: u8) {
+    pub async fn set_addr(&mut self, addr: Ipv4Addr, mask: u8) {
+        let (tx, rx) = oneshot::channel();
         self.ctrl
-            .unbounded_send(IfaceCtrl::SetAddr(addr, mask))
+            .unbounded_send(IfaceCtrl::SetAddr(addr, mask, tx))
             .unwrap();
+        rx.await.unwrap();
         self.addr = addr;
         self.mask = mask;
     }
@@ -155,10 +157,11 @@ where
                     match ctrl {
                         IfaceCtrl::Up => iface.get_ref().put_up()?,
                         IfaceCtrl::Down => iface.get_ref().put_down()?,
-                        IfaceCtrl::SetAddr(addr, mask) => {
+                        IfaceCtrl::SetAddr(addr, mask, tx) => {
                             iface.get_ref().set_ipv4_addr(addr, mask)?;
                             iface.get_ref().put_up()?;
                             iface.get_ref().add_ipv4_route(Ipv4Range::global().into())?;
+                            tx.send(()).ok();
                         }
                     }
                 }
