@@ -246,7 +246,7 @@ where
                             break;
                         }
                     } else {
-                        println!("{}", ev);
+                        println!("{} (stdout): {}", id, ev);
                     }
                 }
                 Result::Ok(())
