@@ -66,17 +66,5 @@ fn main() {
                 break;
             }
         }
-        client.send(Command::Exit);
-        loop {
-            if client.recv().await == Some(Event::Exited) {
-                break;
-            }
-        }
-        server.send(Command::Exit);
-        loop {
-            if server.recv().await == Some(Event::Exited) {
-                break;
-            }
-        }
     });
 }

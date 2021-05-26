@@ -101,7 +101,7 @@ where
 
     pub async fn plug(&mut self, machine: MachineId, net: NetworkId, addr: Option<Ipv4Addr>) {
         if let Connector::Plugged(_) = self.plugs[machine.0] {
-            tracing::debug!("Unplugging {}", machine);
+            log::debug!("Unplugging {}", machine);
             self.unplug(machine).await
         }
         let plug = std::mem::replace(&mut self.plugs[machine.0], Connector::Plugged(net));
@@ -111,7 +111,7 @@ where
             let mask = net.range.netmask_prefix_length();
             net.router
                 .add_connection(machine.0, plug, vec![addr.into()]);
-            tracing::debug!("Setting {}'s address to {}/{}", machine, addr, mask);
+            log::debug!("Setting {}'s address to {}/{}", machine, addr, mask);
             self.machines[machine.0].set_addr(addr, mask).await;
         }
     }
