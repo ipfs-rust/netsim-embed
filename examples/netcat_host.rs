@@ -1,6 +1,4 @@
-use async_process::{Command, Stdio};
-use async_std::io::BufReader;
-use futures::{AsyncBufReadExt, StreamExt};
+use async_process::Command;
 use netsim_embed::*;
 use netsim_embed_machine::Namespace;
 
@@ -17,24 +15,15 @@ fn main() {
         let server_addr = netsim.machine(server).addr();
         println!("Server Addr {}:4242", server_addr.to_string());
 
-        let fut = async move {
-            let mut cmd = Command::new("nc");
-
-            cmd.args(&["-4", &*server_addr.to_string(), "4242"]);
-            cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-            let mut child = cmd.spawn().unwrap();
-            println!("Spawned child");
-            let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines().fuse();
-            let line = stdout.next().await.unwrap()?;
-            let _ = child.kill();
-
-            Result::<_, anyhow::Error>::Ok(line)
-        };
         let _ns = Namespace::current().unwrap();
         let ns_server = netsim.machine(server).namespace();
         println!("{}", ns_server);
         netsim.machine(server).namespace().enter().unwrap();
-        let response = fut.await.unwrap();
-        println!("response: {}", response);
+
+        let mut cmd = Command::new("nc");
+        cmd.args(&[&*server_addr.to_string(), "4242"]);
+        let output = cmd.output().await.unwrap();
+        println!("response: {}", std::str::from_utf8(&output.stdout).unwrap());
+        //println!("error: {}", std::str::from_utf8(&output.stderr).unwrap());
     });
 }
