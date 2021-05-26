@@ -35,6 +35,7 @@ enum IfaceCtrl {
     Up,
     Down,
     SetAddr(Ipv4Addr, u8, oneshot::Sender<()>),
+    Exit,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -84,7 +85,9 @@ where
             join: Some(join),
         }
     }
+}
 
+impl<C, E> Machine<C, E> {
     pub fn id(&self) -> MachineId {
         self.id
     }
@@ -130,6 +133,7 @@ where
 
 impl<C, E> Drop for Machine<C, E> {
     fn drop(&mut self) {
+        self.ctrl.unbounded_send(IfaceCtrl::Exit).ok();
         self.join.take().unwrap().join().unwrap().unwrap();
     }
 }
@@ -168,6 +172,9 @@ where
                             iface.get_ref().put_up()?;
                             iface.get_ref().add_ipv4_route(Ipv4Range::global().into())?;
                             tx.send(()).ok();
+                        }
+                        IfaceCtrl::Exit => {
+                            break;
                         }
                     }
                 }
@@ -225,7 +232,7 @@ where
                 let mut buf = Vec::with_capacity(4096);
                 while let Some(cmd) = cmd.next().await {
                     buf.clear();
-                    tracing::trace!("{}", cmd);
+                    log::trace!("{}", cmd);
                     writeln!(buf, "{}", cmd)?;
                     stdin.write_all(&buf).await?;
                 }
@@ -261,10 +268,9 @@ where
                 res = command_task => res?,
                 res = event_task => res?,
             }
-            child.status().await.unwrap();
-            Ok(())
+            child.kill()
         });
-        tracing::info!("{}'s event loop yielded with {:?}", id, res);
+        log::info!("{}'s event loop yielded with {:?}", id, res);
         res
     })
 }

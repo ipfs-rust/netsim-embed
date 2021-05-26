@@ -81,6 +81,5 @@ fn main() {
             sim.machine(watcher).recv().await,
             Some(format!("<up {}/0", addr3))
         );
-        sim.machine(pinger).send("exit".to_string());
     });
 }

@@ -15,11 +15,11 @@ async-global-executor = "2.0.2"
 async-process = "1.0.2"
 futures = "0.3.13"
 libpacket = "0.1.0"
+log = "0.4.14"
 netsim-embed-core = { version = "0.4.0", path = "core" }
 netsim-embed-machine = { version = "0.4.0", path = "machine" }
 netsim-embed-nat = { version = "0.4.0", path = "nat" }
 netsim-embed-router = { version = "0.4.0", path = "router" }
-tracing = "0.1.25"
 
 [dev-dependencies]
 anyhow = "1.0.40"
