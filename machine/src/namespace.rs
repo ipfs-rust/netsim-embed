@@ -51,10 +51,27 @@ impl Namespace {
         }
         Ok(())
     }
+
+    /// Enter this namespace and change back to previous one when guard is dropped
+    pub fn enter_guarded(&self) -> Result<NamespaceGuard, io::Error> {
+        let prior_ns = Self::current()?;
+        self.enter()?;
+        Ok(NamespaceGuard(prior_ns))
+    }
 }
 
 impl std::fmt::Display for Namespace {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "/proc/{}/task/{}/ns/net", self.pid, self.tid)
+    }
+}
+
+pub struct NamespaceGuard(Namespace);
+
+impl Drop for NamespaceGuard {
+    fn drop(&mut self) {
+        if let Err(e) = self.0.enter() {
+            log::error!("cannot change back to namespace {:?}: {}", self.0, e);
+        }
     }
 }

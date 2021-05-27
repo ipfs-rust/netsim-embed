@@ -23,6 +23,7 @@ use futures::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 use netsim_embed_core::{Ipv4Range, Packet, Plug};
+use std::collections::VecDeque;
 use std::fmt::{self, Display};
 use std::io::{Error, ErrorKind, Result, Write};
 use std::net::Ipv4Addr;
@@ -59,6 +60,7 @@ pub struct Machine<C, E> {
     tx: mpsc::UnboundedSender<C>,
     rx: mpsc::UnboundedReceiver<E>,
     join: Option<thread::JoinHandle<Result<()>>>,
+    buffer: VecDeque<E>,
 }
 
 impl<C, E> Machine<C, E>
@@ -83,6 +85,7 @@ where
             tx: cmd_tx,
             rx: event_rx,
             join: Some(join),
+            buffer: VecDeque::new(),
         }
     }
 }
@@ -115,7 +118,57 @@ impl<C, E> Machine<C, E> {
     }
 
     pub async fn recv(&mut self) -> Option<E> {
-        self.rx.next().await
+        if let Some(ev) = self.buffer.pop_front() {
+            Some(ev)
+        } else {
+            self.rx.next().await
+        }
+    }
+
+    pub async fn select<F, T>(&mut self, f: F) -> Option<T>
+    where
+        F: Fn(&E) -> Option<T>,
+    {
+        if let Some(res) = self.buffer.iter().find_map(&f) {
+            return Some(res);
+        }
+        loop {
+            match self.rx.next().await {
+                Some(ev) => {
+                    if let Some(res) = f(&ev) {
+                        return Some(res);
+                    } else {
+                        self.buffer.push_back(ev);
+                    }
+                }
+                None => return None,
+            }
+        }
+    }
+
+    pub async fn select_draining<F, T>(&mut self, f: F) -> Option<T>
+    where
+        F: Fn(&E) -> Option<T>,
+    {
+        while let Some(ev) = self.buffer.pop_front() {
+            if let Some(res) = f(&ev) {
+                return Some(res);
+            }
+        }
+        loop {
+            match self.rx.next().await {
+                Some(ev) => {
+                    if let Some(res) = f(&ev) {
+                        return Some(res);
+                    }
+                }
+                None => return None,
+            }
+        }
+    }
+
+    pub fn drain(&mut self) -> Vec<E> {
+        self.buffer.drain(..).collect()
     }
 
     pub fn up(&self) {
