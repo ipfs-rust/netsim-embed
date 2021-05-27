@@ -125,9 +125,9 @@ impl<C, E> Machine<C, E> {
         }
     }
 
-    pub async fn select<F, T>(&mut self, f: F) -> Option<T>
+    pub async fn select<F, T>(&mut self, mut f: F) -> Option<T>
     where
-        F: Fn(&E) -> Option<T>,
+        F: FnMut(&E) -> Option<T>,
     {
         if let Some((idx, res)) = self
             .buffer
@@ -152,9 +152,9 @@ impl<C, E> Machine<C, E> {
         }
     }
 
-    pub async fn select_draining<F, T>(&mut self, f: F) -> Option<T>
+    pub async fn select_draining<F, T>(&mut self, mut f: F) -> Option<T>
     where
-        F: Fn(&E) -> Option<T>,
+        F: FnMut(&E) -> Option<T>,
     {
         while let Some(ev) = self.buffer.pop_front() {
             if let Some(res) = f(&ev) {
