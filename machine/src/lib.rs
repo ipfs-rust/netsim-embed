@@ -129,7 +129,13 @@ impl<C, E> Machine<C, E> {
     where
         F: Fn(&E) -> Option<T>,
     {
-        if let Some(res) = self.buffer.iter().find_map(&f) {
+        if let Some((idx, res)) = self
+            .buffer
+            .iter()
+            .enumerate()
+            .find_map(|(idx, ev)| f(ev).map(|x| (idx, x)))
+        {
+            self.buffer.remove(idx);
             return Some(res);
         }
         loop {
