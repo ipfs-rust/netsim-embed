@@ -1,6 +1,5 @@
 use std::fs::File;
 use std::io::{self, Write};
-use std::marker::PhantomData;
 use std::os::unix::io::AsRawFd;
 
 pub fn unshare_user() -> Result<(), io::Error> {
@@ -52,33 +51,10 @@ impl Namespace {
         }
         Ok(())
     }
-
-    /// Enter this namespace and change back to previous one when guard is dropped
-    pub fn enter_guarded(&self) -> Result<NamespaceGuard, io::Error> {
-        let prior_ns = Self::current()?;
-        self.enter()?;
-        Ok(NamespaceGuard {
-            prior_ns,
-            _ph: PhantomData,
-        })
-    }
 }
 
 impl std::fmt::Display for Namespace {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "/proc/{}/task/{}/ns/net", self.pid, self.tid)
-    }
-}
-
-pub struct NamespaceGuard {
-    prior_ns: Namespace,
-    _ph: PhantomData<std::rc::Rc<()>>,
-}
-
-impl Drop for NamespaceGuard {
-    fn drop(&mut self) {
-        if let Err(e) = self.prior_ns.enter() {
-            log::error!("cannot change back to namespace {}: {}", self.prior_ns, e);
-        }
     }
 }

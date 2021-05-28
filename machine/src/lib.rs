@@ -14,7 +14,7 @@ macro_rules! errno {
 pub mod iface;
 mod namespace;
 
-pub use namespace::{unshare_user, Namespace, NamespaceGuard};
+pub use namespace::{unshare_user, Namespace};
 
 use async_process::Command;
 use futures::channel::{mpsc, oneshot};
