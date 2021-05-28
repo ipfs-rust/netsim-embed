@@ -21,7 +21,7 @@ use futures::channel::{mpsc, oneshot};
 use futures::future::FutureExt;
 use futures::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use futures::sink::SinkExt;
-use futures::stream::StreamExt;
+use futures::stream::{FusedStream, StreamExt};
 use netsim_embed_core::{Ipv4Range, Packet, Plug};
 use std::collections::VecDeque;
 use std::fmt::{self, Display};
@@ -174,7 +174,13 @@ impl<C, E> Machine<C, E> {
     }
 
     pub fn drain(&mut self) -> Vec<E> {
-        self.buffer.drain(..).collect()
+        let mut res = self.buffer.drain(..).collect::<Vec<_>>();
+        if !self.rx.is_terminated() {
+            while let Ok(Some(x)) = self.rx.try_next() {
+                res.push(x);
+            }
+        }
+        res
     }
 
     pub fn up(&self) {
