@@ -1,6 +1,6 @@
 use std::net::Ipv4Addr;
 
-#[derive(PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Ipv4AddrClass {
     Unspecified,
     CurrentNetwork,

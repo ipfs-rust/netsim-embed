@@ -124,6 +124,20 @@ impl Ipv4Range {
         }
     }
 
+    /// Generate an IP address for a device.
+    pub fn address_for(&self, device: u32) -> Ipv4Addr {
+        let mask = !0 >> self.bits;
+        assert!(mask > 1);
+        let class = if self.bits == 0 {
+            Ipv4AddrClass::Global
+        } else {
+            self.addr.class()
+        };
+        let addr = Ipv4Addr::from(u32::from(self.addr) | (device & mask) + 2);
+        assert_eq!(class, addr.class());
+        addr
+    }
+
     /// Check whether this range contains the given IP address
     pub fn contains(&self, ip: Ipv4Addr) -> bool {
         let base_addr = u32::from(self.addr);

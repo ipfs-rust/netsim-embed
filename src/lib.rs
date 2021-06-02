@@ -106,7 +106,7 @@ where
         }
         let plug = std::mem::replace(&mut self.plugs[machine.0], Connector::Plugged(net));
         if let Connector::Unplugged(plug) = plug {
-            let net = &self.networks[net.0];
+            let net = &mut self.networks[net.0];
             let addr = addr.unwrap_or_else(|| net.random_addr());
             let mask = net.range.netmask_prefix_length();
             net.router
@@ -176,12 +176,18 @@ pub struct Network {
     id: NetworkId,
     range: Ipv4Range,
     router: Ipv4Router,
+    device: u32,
 }
 
 impl Network {
     fn new(id: NetworkId, range: Ipv4Range) -> Self {
         let router = Ipv4Router::new(range.gateway_addr());
-        Self { id, range, router }
+        Self {
+            id,
+            range,
+            router,
+            device: 0,
+        }
     }
 
     pub fn id(&self) -> NetworkId {
@@ -192,8 +198,10 @@ impl Network {
         self.range
     }
 
-    pub fn random_addr(&self) -> Ipv4Addr {
-        self.range.random_client_addr()
+    pub fn random_addr(&mut self) -> Ipv4Addr {
+        let addr = self.range.address_for(self.device);
+        self.device += 1;
+        addr
     }
 }
 
