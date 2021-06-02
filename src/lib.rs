@@ -93,6 +93,10 @@ where
         &self.networks[id.0]
     }
 
+    pub fn network_mut(&mut self, id: NetworkId) -> &mut Network {
+        &mut self.networks[id.0]
+    }
+
     pub fn spawn_network(&mut self, range: Ipv4Range) -> NetworkId {
         let id = NetworkId(self.networks.len());
         self.networks.push(Network::new(id, range));
@@ -106,8 +110,8 @@ where
         }
         let plug = std::mem::replace(&mut self.plugs[machine.0], Connector::Plugged(net));
         if let Connector::Unplugged(plug) = plug {
-            let net = &self.networks[net.0];
-            let addr = addr.unwrap_or_else(|| net.random_addr());
+            let net = &mut self.networks[net.0];
+            let addr = addr.unwrap_or_else(|| net.unique_addr());
             let mask = net.range.netmask_prefix_length();
             net.router
                 .add_connection(machine.0, plug, vec![addr.into()]);
@@ -150,7 +154,7 @@ where
     ) {
         let (public, nat_public) = wire();
         let (nat_private, private) = wire();
-        let nat_addr = self.networks[public_net.0].random_addr();
+        let nat_addr = self.networks[public_net.0].unique_addr();
         let nat_range = self.networks[private_net.0].range;
         let mut nat = Ipv4Nat::new(nat_public, nat_private, nat_addr, nat_range);
         nat.set_hair_pinning(config.hair_pinning);
@@ -176,12 +180,18 @@ pub struct Network {
     id: NetworkId,
     range: Ipv4Range,
     router: Ipv4Router,
+    device: u32,
 }
 
 impl Network {
     fn new(id: NetworkId, range: Ipv4Range) -> Self {
         let router = Ipv4Router::new(range.gateway_addr());
-        Self { id, range, router }
+        Self {
+            id,
+            range,
+            router,
+            device: 0,
+        }
     }
 
     pub fn id(&self) -> NetworkId {
@@ -192,8 +202,10 @@ impl Network {
         self.range
     }
 
-    pub fn random_addr(&self) -> Ipv4Addr {
-        self.range.random_client_addr()
+    pub fn unique_addr(&mut self) -> Ipv4Addr {
+        let addr = self.range.address_for(self.device);
+        self.device += 1;
+        addr
     }
 }
 
