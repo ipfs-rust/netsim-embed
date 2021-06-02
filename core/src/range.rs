@@ -133,7 +133,7 @@ impl Ipv4Range {
         } else {
             self.addr.class()
         };
-        let addr = Ipv4Addr::from(u32::from(self.addr) | (device & mask) + 2);
+        let addr = Ipv4Addr::from(u32::from(self.addr) | ((device & mask) + 2));
         assert_eq!(class, addr.class());
         addr
     }

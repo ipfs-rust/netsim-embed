@@ -93,6 +93,10 @@ where
         &self.networks[id.0]
     }
 
+    pub fn network_mut(&mut self, id: NetworkId) -> &mut Network {
+        &mut self.networks[id.0]
+    }
+
     pub fn spawn_network(&mut self, range: Ipv4Range) -> NetworkId {
         let id = NetworkId(self.networks.len());
         self.networks.push(Network::new(id, range));
