@@ -100,6 +100,11 @@ impl Ipv4Range {
         Ipv4Addr::from(u32::from(self.addr) | 1)
     }
 
+    /// Get the broadcast address, ie. the highest IP address which is part of the range.
+    pub fn broadcast_addr(&self) -> Ipv4Addr {
+        Ipv4Addr::from(!(!0 >> self.bits) | u32::from(self.addr))
+    }
+
     /// Get a random IP address from the range which is not the base address or the default
     /// for the gateway address.
     pub fn random_client_addr(&self) -> Ipv4Addr {
@@ -128,13 +133,8 @@ impl Ipv4Range {
     pub fn address_for(&self, device: u32) -> Ipv4Addr {
         let mask = !0 >> self.bits;
         assert!(mask > 1);
-        let class = if self.bits == 0 {
-            Ipv4AddrClass::Global
-        } else {
-            self.addr.class()
-        };
         let addr = Ipv4Addr::from(u32::from(self.addr) | ((device & mask) + 2));
-        assert_eq!(class, addr.class());
+        assert_ne!(addr, self.broadcast_addr());
         addr
     }
 
