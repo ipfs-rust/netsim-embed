@@ -24,9 +24,9 @@ fn main() {
     run(async {
         let mut sim = Netsim::<String, String>::new();
         let net = sim.spawn_network(Ipv4Range::global());
-        let addr1 = sim.network_mut(net).random_addr();
-        let addr2 = sim.network_mut(net).random_addr();
-        let addr3 = sim.network_mut(net).random_addr();
+        let addr1 = sim.network_mut(net).unique_addr();
+        let addr2 = sim.network_mut(net).unique_addr();
+        let addr3 = sim.network_mut(net).unique_addr();
         let if_watch_bin = exe("if_watch");
         let wait_for_exit_bin = exe("wait_for_exit");
         let watcher = sim

@@ -22,7 +22,7 @@ fn main() {
         let opts = Opts::from_args();
         let mut sim = Netsim::new();
         let public = sim.spawn_network(Ipv4Range::global().split(2)[0]);
-        let server_addr = sim.network_mut(public).random_addr();
+        let server_addr = sim.network_mut(public).unique_addr();
         let delay = opts.delay_ms.map(|delay| {
             let mut buffer = DelayBuffer::new();
             buffer.set_delay(Duration::from_millis(delay));
