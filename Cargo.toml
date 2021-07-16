@@ -3,7 +3,7 @@ members = ["cli", "core", "machine", "nat", "router", "."]
 
 [package]
 name = "netsim-embed"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["David Craven <david@craven.ch>"]
 edition = "2018"
 description = "Network simulator."
@@ -19,7 +19,7 @@ log = "0.4.14"
 netsim-embed-core = { version = "0.4.1", path = "core" }
 netsim-embed-machine = { version = "0.4.0", path = "machine" }
 netsim-embed-nat = { version = "0.4.0", path = "nat" }
-netsim-embed-router = { version = "0.4.0", path = "router" }
+netsim-embed-router = { version = "0.4.1", path = "router" }
 
 [dev-dependencies]
 anyhow = "1.0.40"
