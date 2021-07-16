@@ -7,6 +7,7 @@ use std::net::Ipv4Addr;
 use std::task::Poll;
 
 #[derive(Debug)]
+#[allow(clippy::enum_variant_names)]
 enum RouterCtrl {
     AddRoute(usize, Plug, Vec<Ipv4Route>),
     RemoveRoute(usize, oneshot::Sender<Option<Plug>>),
