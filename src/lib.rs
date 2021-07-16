@@ -146,6 +146,16 @@ where
             .add_connection(net_a.id(), plug_a, vec![range_a.into()]);
     }
 
+    pub fn enable_route(&mut self, net_a: NetworkId, net_b: NetworkId) {
+        self.networks[net_a.0].router.enable_route(net_b.id());
+        self.networks[net_b.0].router.enable_route(net_a.id());
+    }
+
+    pub fn disable_route(&mut self, net_a: NetworkId, net_b: NetworkId) {
+        self.networks[net_a.0].router.disable_route(net_b.id());
+        self.networks[net_b.0].router.disable_route(net_a.id());
+    }
+
     pub fn add_nat_route(
         &mut self,
         config: NatConfig,

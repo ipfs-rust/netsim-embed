@@ -7,9 +7,12 @@ use std::net::Ipv4Addr;
 use std::task::Poll;
 
 #[derive(Debug)]
+#[allow(clippy::enum_variant_names)]
 enum RouterCtrl {
     AddRoute(usize, Plug, Vec<Ipv4Route>),
     RemoveRoute(usize, oneshot::Sender<Option<Plug>>),
+    EnableRoute(usize),
+    DisableRoute(usize),
 }
 
 #[derive(Debug)]
@@ -38,6 +41,18 @@ impl Ipv4Router {
             .unwrap();
         rx.await.unwrap()
     }
+
+    pub fn enable_route(&self, id: usize) {
+        self.ctrl
+            .unbounded_send(RouterCtrl::EnableRoute(id))
+            .unwrap();
+    }
+
+    pub fn disable_route(&self, id: usize) {
+        self.ctrl
+            .unbounded_send(RouterCtrl::DisableRoute(id))
+            .unwrap();
+    }
 }
 
 fn router(addr: Ipv4Addr, mut ctrl: mpsc::UnboundedReceiver<RouterCtrl>) {
@@ -47,16 +62,26 @@ fn router(addr: Ipv4Addr, mut ctrl: mpsc::UnboundedReceiver<RouterCtrl>) {
             futures::select! {
                 ctrl = ctrl.next() => match ctrl {
                     Some(RouterCtrl::AddRoute(id, plug, routes)) => {
-                        conns.push((id, plug, routes));
+                        conns.push((id, plug, routes, true));
                     }
                     Some(RouterCtrl::RemoveRoute(id, ch)) => {
-                        let plug = if let Some(idx) = conns.iter().position(|(id2, _, _)| *id2 == id) {
-                            let (_, plug, _) = conns.swap_remove(idx);
+                        let plug = if let Some(idx) = conns.iter().position(|(id2, _, _, _)| *id2 == id) {
+                            let (_, plug, _, _) = conns.swap_remove(idx);
                             Some(plug)
                         } else {
                             None
                         };
                         ch.send(plug).ok();
+                    }
+                    Some(RouterCtrl::EnableRoute(id)) => {
+                        if let Some((_, _, _, en)) = conns.iter_mut().find(|(id2, _, _, _)| id == *id2) {
+                            *en = true;
+                        }
+                    }
+                    Some(RouterCtrl::DisableRoute(id)) => {
+                        if let Some((_, _, _, en)) = conns.iter_mut().find(|(id2, _, _, _)| id == *id2) {
+                            *en = false;
+                        }
                     }
                     None => break,
                 },
@@ -69,22 +94,25 @@ fn router(addr: Ipv4Addr, mut ctrl: mpsc::UnboundedReceiver<RouterCtrl>) {
     }).detach()
 }
 
-async fn incoming(conns: &mut [(usize, Plug, Vec<Ipv4Route>)]) -> (usize, Option<Vec<u8>>) {
-    if conns.is_empty() {
+async fn incoming(conns: &mut [(usize, Plug, Vec<Ipv4Route>, bool)]) -> (usize, Option<Vec<u8>>) {
+    let mut futures = conns
+        .iter_mut()
+        .enumerate()
+        .filter(|(_, (_, _, _, en))| *en)
+        .map(|(i, (_, plug, _, _))| async move { (i, plug.incoming().await) })
+        .collect::<FuturesUnordered<_>>();
+    if futures.is_empty() {
         poll_fn(|_| Poll::Pending).await
     } else {
-        conns
-            .iter_mut()
-            .enumerate()
-            .map(|(i, (_, plug, _))| async move { (i, plug.incoming().await) })
-            .collect::<FuturesUnordered<_>>()
-            .next()
-            .await
-            .unwrap()
+        futures.next().await.unwrap()
     }
 }
 
-fn forward_packet(addr: Ipv4Addr, conns: &mut [(usize, Plug, Vec<Ipv4Route>)], bytes: Vec<u8>) {
+fn forward_packet(
+    addr: Ipv4Addr,
+    conns: &mut [(usize, Plug, Vec<Ipv4Route>, bool)],
+    bytes: Vec<u8>,
+) {
     let packet = if let Some(packet) = Ipv4Packet::new(&bytes) {
         packet
     } else {
@@ -96,7 +124,10 @@ fn forward_packet(addr: Ipv4Addr, conns: &mut [(usize, Plug, Vec<Ipv4Route>)], b
         log::info!("router {}: dropping packet addressed to me", addr);
         return;
     }
-    for (_, tx, routes) in conns {
+    for (_, tx, routes, en) in conns {
+        if !*en {
+            continue;
+        }
         for route in routes {
             if route.dest().contains(dest) || dest.is_broadcast() || dest.is_multicast() {
                 log::debug!("router {}: routing packet on route {:?}", addr, route);
