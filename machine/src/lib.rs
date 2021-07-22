@@ -288,9 +288,12 @@ where
             .fuse();
             futures::pin_mut!(writer_task);
 
-            bin.stdin(Stdio::piped()).stdout(Stdio::piped());
+            bin.stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
             let mut child = bin.spawn()?;
             let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines().fuse();
+            let mut stderr = BufReader::new(child.stderr.take().unwrap()).lines().fuse();
             let mut stdin = child.stdin.take().unwrap();
 
             let command_task = async {
@@ -326,12 +329,23 @@ where
             .fuse();
             futures::pin_mut!(event_task);
 
+            let stderr_task = async {
+                while let Some(ev) = stderr.next().await {
+                    let ev = ev?;
+                    println!("{} (stderr): {}", id, ev);
+                }
+                Result::Ok(())
+            }
+            .fuse();
+            futures::pin_mut!(stderr_task);
+
             futures::select! {
                 res = ctrl_task => res?,
                 res = reader_task => res?,
                 res = writer_task => res?,
                 res = command_task => res?,
                 res = event_task => res?,
+                res = stderr_task => res?,
             }
             child.kill()
         });
