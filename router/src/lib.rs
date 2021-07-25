@@ -125,16 +125,18 @@ fn forward_packet(
         return;
     }
     for (_, tx, routes, en) in conns {
-        if !*en {
-            continue;
-        }
         for route in routes {
             if route.dest().contains(dest) || dest.is_broadcast() || dest.is_multicast() {
-                log::debug!("router {}: routing packet on route {:?}", addr, route);
-                let _ = tx.unbounded_send(bytes);
-                return;
+                if !*en {
+                    log::info!("router {}: route {:?} disabled", addr, route);
+                } else {
+                    log::debug!("router {}: routing packet on route {:?}", addr, route);
+                    let _ = tx.unbounded_send(bytes);
+                    return;
+                }
             }
         }
     }
-    log::info!("router {}: dropping unroutable packet to {}", addr, dest);
+    let src = packet.get_source();
+    log::info!("router {}: dropping unroutable packet from {} to {}", addr, src, dest);
 }
