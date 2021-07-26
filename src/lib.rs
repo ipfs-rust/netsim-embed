@@ -175,7 +175,7 @@ where
         self.networks[public_net.0].router.add_connection(
             private_net.id(),
             public,
-            vec![nat_range.into()],
+            vec![Ipv4Range::new(nat_addr, 32).into()],
         );
         self.networks[private_net.0].router.add_connection(
             public_net.id(),

@@ -98,9 +98,10 @@ impl Ipv4Nat {
                     let dest_addr = packet.get_destination();
 
                     if !self.subnet.contains(*source_addr.ip()) {
-                        log::info!(
-                            "nat {}: dropping outbound packet which does not originate from our subnet.",
+                        log::debug!(
+                            "nat {}: dropping outbound packet with source addr {} which does not originate from our subnet.",
                             self.public_ip,
+                            source_addr.ip(),
                         );
                         continue;
                     }
