@@ -243,6 +243,7 @@ where
                         }
                     }
                 }
+                log::info!("{} (ctrl): closed", id);
                 Result::Ok(())
             }
             .fuse();
@@ -259,7 +260,7 @@ where
                     if buf[0] >> 4 != 4 {
                         continue;
                     }
-                    log::debug!("machine {}: sending packet", id.0);
+                    log::debug!("{} (reader): sending packet", id);
                     let mut bytes = buf[..n].to_vec();
                     if let Some(mut packet) = Packet::new(&mut bytes) {
                         packet.set_checksum();
@@ -268,6 +269,7 @@ where
                         break;
                     }
                 }
+                log::info!("{} (reader): closed", id);
                 Result::Ok(())
             }
             .fuse();
@@ -275,7 +277,7 @@ where
 
             let writer_task = async {
                 while let Some(packet) = rx.next().await {
-                    log::debug!("machine {}: received packet", id.0);
+                    log::debug!("{} (writer): received packet", id);
                     // can error if the interface is down
                     if let Ok(n) = iface.write_with(|iface| iface.send(&packet)).await {
                         if n == 0 {
@@ -283,6 +285,7 @@ where
                         }
                     }
                 }
+                log::info!("{} (writer): closed", id);
                 Result::Ok(())
             }
             .fuse();
@@ -304,6 +307,7 @@ where
                     writeln!(buf, "{}", cmd)?;
                     stdin.write_all(&buf).await?;
                 }
+                log::info!("{} (command): closed", id);
                 Result::Ok(())
             }
             .fuse();
@@ -324,6 +328,7 @@ where
                         println!("{} (stdout): {}", id, ev);
                     }
                 }
+                log::info!("{} (stdout): closed", id);
                 Result::Ok(())
             }
             .fuse();
@@ -334,6 +339,7 @@ where
                     let ev = ev?;
                     println!("{} (stderr): {}", id, ev);
                 }
+                log::info!("{} (stderr): closed", id);
                 Result::Ok(())
             }
             .fuse();
