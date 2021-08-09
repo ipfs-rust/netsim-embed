@@ -140,7 +140,7 @@ fn forward_packet(
     }
     if !forwarded {
         let src = packet.get_source();
-        log::info!(
+        log::debug!(
             "router {}: dropping unroutable packet from {} to {}",
             addr,
             src,
