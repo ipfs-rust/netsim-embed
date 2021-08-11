@@ -129,7 +129,7 @@ fn forward_packet(
         for route in routes {
             if route.dest().contains(dest) || dest.is_broadcast() || dest.is_multicast() {
                 if !*en {
-                    log::info!("router {}: route {:?} disabled", addr, route);
+                    log::debug!("router {}: route {:?} disabled", addr, route);
                 } else {
                     log::debug!("router {}: routing packet on route {:?}", addr, route);
                     let _ = tx.unbounded_send(bytes.clone());
