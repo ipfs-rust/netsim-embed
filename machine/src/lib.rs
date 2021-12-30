@@ -260,7 +260,7 @@ where
                     if buf[0] >> 4 != 4 {
                         continue;
                     }
-                    log::debug!("{} (reader): sending packet", id);
+                    log::trace!("{} (reader): sending packet", id);
                     let mut bytes = buf[..n].to_vec();
                     if let Some(mut packet) = Packet::new(&mut bytes) {
                         packet.set_checksum();
@@ -277,7 +277,7 @@ where
 
             let writer_task = async {
                 while let Some(packet) = rx.next().await {
-                    log::debug!("{} (writer): received packet", id);
+                    log::trace!("{} (writer): received packet", id);
                     // can error if the interface is down
                     if let Ok(n) = iface.write_with(|iface| iface.send(&packet)).await {
                         if n == 0 {
