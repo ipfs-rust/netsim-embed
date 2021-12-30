@@ -117,11 +117,45 @@ impl<C, E> Machine<C, E> {
         self.tx.unbounded_send(cmd).unwrap();
     }
 
+    pub fn drain(&mut self) -> Vec<E> {
+        let mut res = self.buffer.drain(..).collect::<Vec<_>>();
+        if !self.rx.is_terminated() {
+            while let Ok(Some(x)) = self.rx.try_next() {
+                res.push(x);
+            }
+        }
+        res
+    }
+
+    pub fn up(&self) {
+        self.ctrl.unbounded_send(IfaceCtrl::Up).unwrap();
+    }
+
+    pub fn down(&self) {
+        self.ctrl.unbounded_send(IfaceCtrl::Down).unwrap();
+    }
+
+    pub fn namespace(&self) -> Namespace {
+        self.ns
+    }
+}
+
+impl<C, E: Display> Machine<C, E> {
+    async fn do_recv(&mut self) -> Option<E> {
+        let ev = self.rx.next().await;
+        if let Some(ref ev) = ev {
+            log::info!("{} {}", self.id, ev);
+        } else {
+            log::info!("{} event stream closed", self.id);
+        }
+        ev
+    }
+
     pub async fn recv(&mut self) -> Option<E> {
         if let Some(ev) = self.buffer.pop_front() {
             Some(ev)
         } else {
-            self.rx.next().await
+            self.do_recv().await
         }
     }
 
@@ -139,7 +173,7 @@ impl<C, E> Machine<C, E> {
             return Some(res);
         }
         loop {
-            match self.rx.next().await {
+            match self.do_recv().await {
                 Some(ev) => {
                     if let Some(res) = f(&ev) {
                         return Some(res);
@@ -162,7 +196,7 @@ impl<C, E> Machine<C, E> {
             }
         }
         loop {
-            match self.rx.next().await {
+            match self.do_recv().await {
                 Some(ev) => {
                     if let Some(res) = f(&ev) {
                         return Some(res);
@@ -171,28 +205,6 @@ impl<C, E> Machine<C, E> {
                 None => return None,
             }
         }
-    }
-
-    pub fn drain(&mut self) -> Vec<E> {
-        let mut res = self.buffer.drain(..).collect::<Vec<_>>();
-        if !self.rx.is_terminated() {
-            while let Ok(Some(x)) = self.rx.try_next() {
-                res.push(x);
-            }
-        }
-        res
-    }
-
-    pub fn up(&self) {
-        self.ctrl.unbounded_send(IfaceCtrl::Up).unwrap();
-    }
-
-    pub fn down(&self) {
-        self.ctrl.unbounded_send(IfaceCtrl::Down).unwrap();
-    }
-
-    pub fn namespace(&self) -> Namespace {
-        self.ns
     }
 }
 
