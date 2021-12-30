@@ -66,7 +66,7 @@ pub struct Machine<C, E> {
 impl<C, E> Machine<C, E>
 where
     C: Display + Send + 'static,
-    E: FromStr + Send + 'static,
+    E: FromStr + Display + Send + 'static,
     E::Err: std::fmt::Debug + Display + Send + Sync,
 {
     pub async fn new(id: MachineId, plug: Plug, cmd: Command) -> Self {
@@ -138,24 +138,12 @@ impl<C, E> Machine<C, E> {
     pub fn namespace(&self) -> Namespace {
         self.ns
     }
-}
-
-impl<C, E: Display> Machine<C, E> {
-    async fn do_recv(&mut self) -> Option<E> {
-        let ev = self.rx.next().await;
-        if let Some(ref ev) = ev {
-            log::info!("{} {}", self.id, ev);
-        } else {
-            log::info!("{} event stream closed", self.id);
-        }
-        ev
-    }
 
     pub async fn recv(&mut self) -> Option<E> {
         if let Some(ev) = self.buffer.pop_front() {
             Some(ev)
         } else {
-            self.do_recv().await
+            self.rx.next().await
         }
     }
 
@@ -173,7 +161,7 @@ impl<C, E: Display> Machine<C, E> {
             return Some(res);
         }
         loop {
-            match self.do_recv().await {
+            match self.rx.next().await {
                 Some(ev) => {
                     if let Some(res) = f(&ev) {
                         return Some(res);
@@ -196,7 +184,7 @@ impl<C, E: Display> Machine<C, E> {
             }
         }
         loop {
-            match self.do_recv().await {
+            match self.rx.next().await {
                 Some(ev) => {
                     if let Some(res) = f(&ev) {
                         return Some(res);
@@ -227,7 +215,7 @@ fn machine<C, E>(
 ) -> thread::JoinHandle<Result<()>>
 where
     C: Display + Send + 'static,
-    E: FromStr + Send + 'static,
+    E: FromStr + Display + Send + 'static,
     E::Err: std::fmt::Debug + Display + Send + Sync,
 {
     thread::spawn(move || {
@@ -333,6 +321,7 @@ where
                             Ok(ev) => ev,
                             Err(err) => return Err(Error::new(ErrorKind::Other, err.to_string())),
                         };
+                        log::debug!("{} {}", id, ev);
                         if event.unbounded_send(ev).is_err() {
                             break;
                         }

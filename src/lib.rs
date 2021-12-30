@@ -52,7 +52,7 @@ impl<C, E> Default for Netsim<C, E> {
 impl<C, E> Netsim<C, E>
 where
     C: Display + Send + 'static,
-    E: FromStr + Send + 'static,
+    E: FromStr + Display + Send + 'static,
     E::Err: std::fmt::Debug + Display + Send + Sync,
 {
     pub fn new() -> Self {
