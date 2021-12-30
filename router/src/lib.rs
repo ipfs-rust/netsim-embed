@@ -17,6 +17,7 @@ enum RouterCtrl {
 
 #[derive(Debug)]
 pub struct Ipv4Router {
+    #[allow(unused)]
     addr: Ipv4Addr,
     ctrl: mpsc::UnboundedSender<RouterCtrl>,
 }

@@ -222,23 +222,11 @@ impl Network {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct NatConfig {
     pub hair_pinning: bool,
     pub symmetric: bool,
     pub blacklist_unrecognized_addrs: bool,
     pub restrict_endpoints: bool,
     pub forward_ports: Vec<(Protocol, u16, SocketAddrV4)>,
-}
-
-impl Default for NatConfig {
-    fn default() -> Self {
-        Self {
-            hair_pinning: false,
-            symmetric: false,
-            blacklist_unrecognized_addrs: false,
-            restrict_endpoints: false,
-            forward_ports: Vec::new(),
-        }
-    }
 }
