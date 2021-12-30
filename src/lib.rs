@@ -7,7 +7,7 @@ pub use netsim_embed_machine::{unshare_user, Machine, MachineId, Namespace};
 use netsim_embed_nat::*;
 use netsim_embed_router::*;
 use std::fmt::Display;
-use std::net::Ipv4Addr;
+use std::net::{Ipv4Addr, SocketAddrV4};
 use std::str::FromStr;
 
 pub fn run<F>(f: F)
@@ -171,6 +171,9 @@ where
         nat.set_symmetric(config.symmetric);
         nat.set_blacklist_unrecognized_addrs(config.blacklist_unrecognized_addrs);
         nat.set_restrict_endpoints(config.restrict_endpoints);
+        for (protocol, port, local_addr) in config.forward_ports {
+            nat.forward_port(port, local_addr, protocol);
+        }
         async_global_executor::spawn(nat).detach();
         self.networks[public_net.0].router.add_connection(
             private_net.id(),
@@ -219,12 +222,13 @@ impl Network {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct NatConfig {
     pub hair_pinning: bool,
     pub symmetric: bool,
     pub blacklist_unrecognized_addrs: bool,
     pub restrict_endpoints: bool,
+    pub forward_ports: Vec<(Protocol, u16, SocketAddrV4)>,
 }
 
 impl Default for NatConfig {
@@ -234,6 +238,7 @@ impl Default for NatConfig {
             symmetric: false,
             blacklist_unrecognized_addrs: false,
             restrict_endpoints: false,
+            forward_ports: Vec::new(),
         }
     }
 }
