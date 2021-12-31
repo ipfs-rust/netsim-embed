@@ -229,6 +229,7 @@ where
 
             let ctrl_task = async {
                 while let Some(ctrl) = ctrl.next().await {
+                    log::debug!("{} CTRL {:?}", id, ctrl);
                     match ctrl {
                         IfaceCtrl::Up => iface.get_ref().put_up()?,
                         IfaceCtrl::Down => iface.get_ref().put_down()?,
@@ -303,7 +304,7 @@ where
                 let mut buf = Vec::with_capacity(4096);
                 while let Some(cmd) = cmd.next().await {
                     buf.clear();
-                    log::trace!("{}", cmd);
+                    log::debug!("{} {}", id, cmd);
                     writeln!(buf, "{}", cmd)?;
                     stdin.write_all(&buf).await?;
                 }
