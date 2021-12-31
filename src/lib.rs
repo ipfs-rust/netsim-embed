@@ -2,7 +2,7 @@ use async_process::Command;
 use futures::prelude::*;
 pub use libpacket::*;
 use netsim_embed_core::*;
-pub use netsim_embed_core::{DelayBuffer, Ipv4Range};
+pub use netsim_embed_core::{DelayBuffer, Ipv4Range, Protocol};
 pub use netsim_embed_machine::{unshare_user, Machine, MachineId, Namespace};
 use netsim_embed_nat::*;
 use netsim_embed_router::*;
