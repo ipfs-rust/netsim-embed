@@ -4,7 +4,7 @@ use std::str::FromStr;
 use thiserror::Error;
 
 /// A range of IPv4 addresses with a common prefix
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Ipv4Range {
     addr: Ipv4Addr,
     bits: u8,

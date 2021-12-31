@@ -66,7 +66,7 @@ pub struct Machine<C, E> {
 impl<C, E> Machine<C, E>
 where
     C: Display + Send + 'static,
-    E: FromStr + Send + 'static,
+    E: FromStr + Display + Send + 'static,
     E::Err: std::fmt::Debug + Display + Send + Sync,
 {
     pub async fn new(id: MachineId, plug: Plug, cmd: Command) -> Self {
@@ -115,6 +115,28 @@ impl<C, E> Machine<C, E> {
 
     pub fn send(&self, cmd: C) {
         self.tx.unbounded_send(cmd).unwrap();
+    }
+
+    pub fn drain(&mut self) -> Vec<E> {
+        let mut res = self.buffer.drain(..).collect::<Vec<_>>();
+        if !self.rx.is_terminated() {
+            while let Ok(Some(x)) = self.rx.try_next() {
+                res.push(x);
+            }
+        }
+        res
+    }
+
+    pub fn up(&self) {
+        self.ctrl.unbounded_send(IfaceCtrl::Up).unwrap();
+    }
+
+    pub fn down(&self) {
+        self.ctrl.unbounded_send(IfaceCtrl::Down).unwrap();
+    }
+
+    pub fn namespace(&self) -> Namespace {
+        self.ns
     }
 
     pub async fn recv(&mut self) -> Option<E> {
@@ -172,28 +194,6 @@ impl<C, E> Machine<C, E> {
             }
         }
     }
-
-    pub fn drain(&mut self) -> Vec<E> {
-        let mut res = self.buffer.drain(..).collect::<Vec<_>>();
-        if !self.rx.is_terminated() {
-            while let Ok(Some(x)) = self.rx.try_next() {
-                res.push(x);
-            }
-        }
-        res
-    }
-
-    pub fn up(&self) {
-        self.ctrl.unbounded_send(IfaceCtrl::Up).unwrap();
-    }
-
-    pub fn down(&self) {
-        self.ctrl.unbounded_send(IfaceCtrl::Down).unwrap();
-    }
-
-    pub fn namespace(&self) -> Namespace {
-        self.ns
-    }
 }
 
 impl<C, E> Drop for Machine<C, E> {
@@ -215,7 +215,7 @@ fn machine<C, E>(
 ) -> thread::JoinHandle<Result<()>>
 where
     C: Display + Send + 'static,
-    E: FromStr + Send + 'static,
+    E: FromStr + Display + Send + 'static,
     E::Err: std::fmt::Debug + Display + Send + Sync,
 {
     thread::spawn(move || {
@@ -229,6 +229,7 @@ where
 
             let ctrl_task = async {
                 while let Some(ctrl) = ctrl.next().await {
+                    log::debug!("{} CTRL {:?}", id, ctrl);
                     match ctrl {
                         IfaceCtrl::Up => iface.get_ref().put_up()?,
                         IfaceCtrl::Down => iface.get_ref().put_down()?,
@@ -260,7 +261,7 @@ where
                     if buf[0] >> 4 != 4 {
                         continue;
                     }
-                    log::debug!("{} (reader): sending packet", id);
+                    log::trace!("{} (reader): sending packet", id);
                     let mut bytes = buf[..n].to_vec();
                     if let Some(mut packet) = Packet::new(&mut bytes) {
                         packet.set_checksum();
@@ -277,7 +278,7 @@ where
 
             let writer_task = async {
                 while let Some(packet) = rx.next().await {
-                    log::debug!("{} (writer): received packet", id);
+                    log::trace!("{} (writer): received packet", id);
                     // can error if the interface is down
                     if let Ok(n) = iface.write_with(|iface| iface.send(&packet)).await {
                         if n == 0 {
@@ -303,7 +304,7 @@ where
                 let mut buf = Vec::with_capacity(4096);
                 while let Some(cmd) = cmd.next().await {
                     buf.clear();
-                    log::trace!("{}", cmd);
+                    log::debug!("{} {}", id, cmd);
                     writeln!(buf, "{}", cmd)?;
                     stdin.write_all(&buf).await?;
                 }
@@ -321,6 +322,7 @@ where
                             Ok(ev) => ev,
                             Err(err) => return Err(Error::new(ErrorKind::Other, err.to_string())),
                         };
+                        log::debug!("{} {}", id, ev);
                         if event.unbounded_send(ev).is_err() {
                             break;
                         }

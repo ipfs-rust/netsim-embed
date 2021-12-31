@@ -17,6 +17,7 @@ enum RouterCtrl {
 
 #[derive(Debug)]
 pub struct Ipv4Router {
+    #[allow(unused)]
     addr: Ipv4Addr,
     ctrl: mpsc::UnboundedSender<RouterCtrl>,
 }
@@ -129,9 +130,9 @@ fn forward_packet(
         for route in routes {
             if route.dest().contains(dest) || dest.is_broadcast() || dest.is_multicast() {
                 if !*en {
-                    log::debug!("router {}: route {:?} disabled", addr, route);
+                    log::trace!("router {}: route {:?} disabled", addr, route);
                 } else {
-                    log::debug!("router {}: routing packet on route {:?}", addr, route);
+                    log::trace!("router {}: routing packet on route {:?}", addr, route);
                     let _ = tx.unbounded_send(bytes.clone());
                     forwarded = true;
                 }
