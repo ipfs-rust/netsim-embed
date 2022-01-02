@@ -176,17 +176,17 @@ impl<C, E> Machine<C, E> {
 
     pub async fn select_draining<F, T>(&mut self, mut f: F) -> Option<T>
     where
-        F: FnMut(&E) -> Option<T>,
+        F: FnMut(E) -> Option<T>,
     {
         while let Some(ev) = self.buffer.pop_front() {
-            if let Some(res) = f(&ev) {
+            if let Some(res) = f(ev) {
                 return Some(res);
             }
         }
         loop {
             match self.rx.next().await {
                 Some(ev) => {
-                    if let Some(res) = f(&ev) {
+                    if let Some(res) = f(ev) {
                         return Some(res);
                     }
                 }
@@ -201,6 +201,34 @@ impl<C, E> Drop for Machine<C, E> {
         self.ctrl.unbounded_send(IfaceCtrl::Exit).ok();
         self.join.take().unwrap().join().unwrap().unwrap();
     }
+}
+
+fn abbrev<T: Display>(t: &T, limit: usize, cut_len: usize) -> String {
+    use std::fmt::Write;
+    struct S(String, usize);
+    impl Write for S {
+        fn write_str(&mut self, s: &str) -> fmt::Result {
+            self.1 += s.len();
+            let mut bytes = (self.0.capacity() - self.0.len()).min(s.len());
+            while !s.is_char_boundary(bytes) {
+                bytes -= 1;
+            }
+            self.0.push_str(&s[..bytes]);
+            Ok(())
+        }
+    }
+    let mut writer = S(String::with_capacity(limit), 0);
+    write!(writer, "{}", t).unwrap();
+    let S(mut result, length) = writer;
+    if length > limit {
+        let mut cut = cut_len;
+        while !result.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        result.truncate(cut);
+        write!(&mut result, "... ({} bytes)", length).unwrap();
+    }
+    result
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -304,7 +332,7 @@ where
                 let mut buf = Vec::with_capacity(4096);
                 while let Some(cmd) = cmd.next().await {
                     buf.clear();
-                    log::debug!("{} {}", id, cmd);
+                    log::debug!("{} {}", id, abbrev(&cmd, 2000, 80));
                     writeln!(buf, "{}", cmd)?;
                     stdin.write_all(&buf).await?;
                 }
@@ -322,7 +350,7 @@ where
                             Ok(ev) => ev,
                             Err(err) => return Err(Error::new(ErrorKind::Other, err.to_string())),
                         };
-                        log::debug!("{} {}", id, ev);
+                        log::debug!("{} {}", id, abbrev(&ev, 2000, 80));
                         if event.unbounded_send(ev).is_err() {
                             break;
                         }
