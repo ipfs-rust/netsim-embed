@@ -194,6 +194,18 @@ impl<C, E> Machine<C, E> {
             }
         }
     }
+
+    pub fn drain_matching<F: FnMut(&E) -> bool>(&mut self, mut f: F) -> Vec<E> {
+        let mut ret = Vec::new();
+        for e in std::mem::take(&mut self.buffer) {
+            if f(&e) {
+                ret.push(e);
+            } else {
+                self.buffer.push_back(e);
+            }
+        }
+        ret
+    }
 }
 
 impl<C, E> Drop for Machine<C, E> {
