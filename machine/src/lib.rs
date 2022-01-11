@@ -260,7 +260,6 @@ where
 {
     thread::spawn(move || {
         let ns = Namespace::unshare()?;
-        let _ = ns_tx.send(ns);
 
         let res = async_global_executor::block_on(async move {
             let iface = iface::Iface::new()?;
@@ -335,7 +334,10 @@ where
             bin.stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
-            let mut child = bin.spawn()?;
+            let mut child = bin.spawn().map_err(|e| {
+                log::error!("cannot start machine {:?}: {}", bin, e);
+                e
+            })?;
             let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines().fuse();
             let mut stderr = BufReader::new(child.stderr.take().unwrap()).lines().fuse();
             let mut stdin = child.stdin.take().unwrap();
@@ -386,6 +388,9 @@ where
             }
             .fuse();
             futures::pin_mut!(stderr_task);
+
+            // unblock here so that possible exec error has a chance to get out
+            let _ = ns_tx.send(ns);
 
             futures::select! {
                 res = ctrl_task => res?,
