@@ -1,6 +1,6 @@
 [package]
 name = "netsim-embed-machine"
-version = "0.6.1"
+version = "0.6.2"
 authors = ["David Craven <david@craven.ch>"]
 edition = "2018"
 description = "Runs a future in a separate network namespace with a TUN adapter."

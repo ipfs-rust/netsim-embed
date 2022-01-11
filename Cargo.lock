@@ -644,7 +644,7 @@ dependencies = [
 
 [[package]]
 name = "netsim-embed-machine"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "async-global-executor",
  "async-io",
