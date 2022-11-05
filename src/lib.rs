@@ -1,5 +1,6 @@
 use async_process::Command;
 use futures::prelude::*;
+use ipc_channel::ipc::{IpcOneShotServer, IpcSender};
 pub use libpacket::*;
 use netsim_embed_core::*;
 pub use netsim_embed_core::{DelayBuffer, Ipv4Range, Protocol};
@@ -69,6 +70,17 @@ where
 
     pub fn machines_mut(&mut self) -> &mut [Machine<C, E>] {
         &mut self.machines
+    }
+
+    pub async fn spawn<T: 'static + Send>(&mut self, function: &str) -> (MachineId, IpcSender<T>) {
+        let (server, server_name) = IpcOneShotServer::new().unwrap();
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        command.args(&["--netsim-embed-internal-call", function, &server_name]);
+        let machine = self.spawn_machine(command, None).await;
+        let (_, ipc) = async_global_executor::spawn_blocking(|| server.accept())
+            .await
+            .unwrap();
+        (machine, ipc)
     }
 
     pub async fn spawn_machine(
@@ -229,4 +241,26 @@ pub struct NatConfig {
     pub blacklist_unrecognized_addrs: bool,
     pub restrict_endpoints: bool,
     pub forward_ports: Vec<(Protocol, u16, SocketAddrV4)>,
+}
+
+#[macro_export]
+macro_rules! dispatch_args {
+    ( $( ($fn:path, $t:ty) ),* $(,)* ) => {{
+        let mut args = std::env::args();
+        args.next();
+        if args.next().map(|v| v == "--netsim-embed-internal-call").unwrap_or(false) {
+            let function = args.next().unwrap();
+            let server_name = args.next().unwrap();
+            $(
+                if function == stringify!($fn) {
+                    let (sender, receiver) = ipc_channel::ipc::channel::<$t>().unwrap();
+                    let server_sender = ipc_channel::ipc::IpcSender::connect(server_name).unwrap();
+                    server_sender.send(sender).unwrap();
+                    $fn(receiver);
+                    std::process::exit(0);
+                }
+            )*
+            panic!("Got a netsim-embed internal call with an unknown function name")
+        }
+    }}
 }

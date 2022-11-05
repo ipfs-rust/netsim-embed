@@ -14,6 +14,7 @@ repository = "https://github.com/ipfs-rust/netsim-embed"
 async-global-executor = "2.0.2"
 async-process = "1.0.2"
 futures = "0.3.13"
+ipc-channel = "0.16.0"
 libpacket = "0.1.0"
 log = "0.4.14"
 netsim-embed-core = { version = "0.4.2", path = "core" }
@@ -30,5 +31,11 @@ async-trait = "0.1.50"
 env_logger = "0.8.3"
 if-watch = "0.2.2"
 ipnet = "2.3.0"
+libtest-mimic = "0.6.0"
 netsim-embed-cli = { path = "cli" }
 udp-socket = "0.1.1"
+
+[[test]]
+name = "smoke_test"
+path = "tests/smoke_test.rs"
+harness = false
