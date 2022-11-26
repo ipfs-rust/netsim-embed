@@ -1,6 +1,7 @@
 use async_process::Command;
+use dlopen::raw::AddressInfoObtainer;
 use futures::prelude::*;
-use ipc_channel::ipc::{IpcOneShotServer, IpcSender};
+use ipc_channel::ipc::{IpcOneShotServer, IpcReceiver, IpcSender};
 pub use libpacket::*;
 use netsim_embed_core::*;
 pub use netsim_embed_core::{DelayBuffer, Ipv4Range, Protocol};
@@ -72,10 +73,14 @@ where
         &mut self.machines
     }
 
-    pub async fn spawn<T: 'static + Send>(&mut self, function: &str) -> (MachineId, IpcSender<T>) {
+    pub async fn spawn<T: 'static + Send>(
+        &mut self,
+        function: fn(IpcReceiver<T>),
+    ) -> (MachineId, IpcSender<T>) {
+        let name = get_fn_name(function);
         let (server, server_name) = IpcOneShotServer::new().unwrap();
         let mut command = Command::new(std::env::current_exe().unwrap());
-        command.args(["--netsim-embed-internal-call", function, &server_name]);
+        command.args(["--netsim-embed-internal-call", &name, &server_name]);
         let machine = self.spawn_machine(command, None).await;
         let (_, ipc) = async_global_executor::spawn_blocking(|| server.accept())
             .await
@@ -200,6 +205,15 @@ where
     }
 }
 
+pub fn get_fn_name<T>(function: fn(IpcReceiver<T>)) -> String {
+    let info = AddressInfoObtainer::new()
+        .obtain(function as *const ())
+        .expect("look up existing function pointer");
+    info.overlapping_symbol
+        .expect("cannot find function symbol: have you used #[no_mangle] for machine definitions and emitted `cargo:rustc-link-arg-tests=-rdynamic` from build.rs?")
+        .name
+}
+
 #[derive(Debug)]
 pub struct Network {
     id: NetworkId,
@@ -243,6 +257,18 @@ pub struct NatConfig {
     pub forward_ports: Vec<(Protocol, u16, SocketAddrV4)>,
 }
 
+#[allow(clippy::needless_doctest_main)]
+/// Dispatch spawned machine invocations to their declared functions.
+///
+/// Each function must be annotated with `#[no_mangle]` so that the symbol is exported,
+/// and the current executable must be linked with `-rdynamic` to add these symbols to
+/// the dynamic symbol table. The latter is best done with a `build.rs` like this:
+///
+/// ```no_run
+/// fn main() {
+///     println!("cargo:rustc-link-arg-tests=-rdynamic");
+/// }
+/// ```
 #[macro_export]
 macro_rules! dispatch_args {
     ( $( ($fn:path, $t:ty) ),* $(,)* ) => {{
@@ -252,7 +278,7 @@ macro_rules! dispatch_args {
             let function = args.next().unwrap();
             let server_name = args.next().unwrap();
             $(
-                if function == stringify!($fn) {
+                if function == $crate::get_fn_name($fn) {
                     let (sender, receiver) = ipc_channel::ipc::channel::<$t>().unwrap();
                     let server_sender = ipc_channel::ipc::IpcSender::connect(server_name).unwrap();
                     server_sender.send(sender).unwrap();
