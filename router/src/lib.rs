@@ -133,7 +133,7 @@ fn forward_packet(
                     log::trace!("router {}: route {:?} disabled", addr, route);
                 } else {
                     log::trace!("router {}: routing packet on route {:?}", addr, route);
-                    let _ = tx.unbounded_send(bytes.clone());
+                    tx.unbounded_send(bytes.clone());
                     forwarded = true;
                 }
             }

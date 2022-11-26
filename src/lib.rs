@@ -75,7 +75,7 @@ where
     pub async fn spawn<T: 'static + Send>(&mut self, function: &str) -> (MachineId, IpcSender<T>) {
         let (server, server_name) = IpcOneShotServer::new().unwrap();
         let mut command = Command::new(std::env::current_exe().unwrap());
-        command.args(&["--netsim-embed-internal-call", function, &server_name]);
+        command.args(["--netsim-embed-internal-call", function, &server_name]);
         let machine = self.spawn_machine(command, None).await;
         let (_, ipc) = async_global_executor::spawn_blocking(|| server.accept())
             .await
