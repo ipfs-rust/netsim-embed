@@ -1,18 +1,24 @@
 use async_process::Command;
 use async_std::future::timeout;
 use netsim_embed::{run, Ipv4Range, Machine, Namespace, Netsim};
-use std::collections::BTreeSet;
-use std::iter::FromIterator;
-use std::net::Ipv4Addr;
-use std::path::PathBuf;
-use std::time::Duration;
+use std::{
+    collections::BTreeSet, iter::FromIterator, net::Ipv4Addr, path::PathBuf, time::Duration,
+};
 
 async fn ping(ns: Namespace, addr: Ipv4Addr) {
-    let mut cmd = Command::new("nsenter");
-    cmd.arg(format!("--net={}", ns));
-    cmd.arg("ping");
-    cmd.arg("-c").arg(4.to_string()).arg(addr.to_string());
-    cmd.status().await.unwrap();
+    Command::new("nsenter")
+        .args([
+            format!("--net={}", ns),
+            "ping".to_owned(),
+            "-c".to_owned(),
+            4.to_string(),
+            "-i".to_owned(),
+            "0.1".to_string(),
+            addr.to_string(),
+        ])
+        .status()
+        .await
+        .unwrap();
 }
 
 fn exe(name: &str) -> PathBuf {
