@@ -271,7 +271,7 @@ pub struct NatConfig {
 /// ```
 #[macro_export]
 macro_rules! dispatch_args {
-    ( $( ($fn:path, $t:ty) ),* $(,)* ) => {{
+    ( $($fn:path),* ) => {{
         let mut args = std::env::args();
         args.next();
         if args.next().map(|v| v == "--netsim-embed-internal-call").unwrap_or(false) {
@@ -279,7 +279,7 @@ macro_rules! dispatch_args {
             let server_name = args.next().unwrap();
             $(
                 if function == $crate::get_fn_name($fn) {
-                    let (sender, receiver) = ipc_channel::ipc::channel::<$t>().unwrap();
+                    let (sender, receiver) = ipc_channel::ipc::channel().unwrap();
                     let server_sender = ipc_channel::ipc::IpcSender::connect(server_name).unwrap();
                     server_sender.send(sender).unwrap();
                     $fn(receiver);

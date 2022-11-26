@@ -43,13 +43,7 @@ fn one_plus_one_makes_two() {
 }
 
 fn main() {
-    netsim_embed::dispatch_args!(
-        (send_one, IpcSender<usize>),
-        (
-            add,
-            (IpcReceiver<usize>, IpcReceiver<usize>, IpcSender<usize>)
-        ),
-    );
+    netsim_embed::dispatch_args!(send_one, add);
     netsim_embed::unshare_user().unwrap();
     let args = libtest_mimic::Arguments::from_args();
     let mktest = |f: fn()| {
