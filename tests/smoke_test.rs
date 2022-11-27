@@ -43,24 +43,6 @@ fn one_plus_one_makes_two() {
 }
 
 fn main() {
-    netsim_embed::dispatch_args!(send_one, add);
-    netsim_embed::unshare_user().unwrap();
-    let args = libtest_mimic::Arguments::from_args();
-    let mktest = |f: fn()| {
-        move || {
-            f();
-            Ok(())
-        }
-    };
-    libtest_mimic::run(
-        &args,
-        vec![
-            libtest_mimic::Trial::test("can_send_one", mktest(can_send_one)),
-            libtest_mimic::Trial::test("one_plus_one_makes_two", || {
-                one_plus_one_makes_two();
-                Ok(())
-            }),
-        ],
-    )
-    .exit();
+    netsim_embed::declare_machines!(send_one, add);
+    netsim_embed::run_tests!(can_send_one, one_plus_one_makes_two);
 }
