@@ -84,7 +84,9 @@ pub async fn run_server<S: Server>() -> Result<()> {
 
     let mut line = String::new();
     std::io::stdin().read_line(&mut line)?;
+    log::info!("run_server got {}", line);
     server.exit().await?;
+    log::info!("run_server exited");
     Ok(())
 }
 
@@ -100,5 +102,6 @@ pub async fn run_client<C: Client>(mut client: C) -> Result<()> {
 
     let mut line = String::new();
     std::io::stdin().read_line(&mut line)?;
+    log::info!("run_client got {}", line);
     Ok(())
 }

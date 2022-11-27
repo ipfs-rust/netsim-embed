@@ -408,7 +408,7 @@ where
                 res = event_task => res?,
                 res = stderr_task => res?,
             };
-            log::info!("killing");
+            log::info!("{} killing", id);
             child.kill()?;
             let deadline = timeout(Duration::from_secs(3), pending::<()>());
             futures::pin_mut!(deadline);
@@ -417,7 +417,8 @@ where
             poll_fn(|cx| {
                 if deadline.poll_unpin(cx).is_ready() {
                     log::warn!(
-                        "ev: {} err: {}",
+                        "{} ev: {} err: {}",
+                        id,
                         event_task.is_some(),
                         stderr_task.is_some()
                     );
@@ -428,14 +429,15 @@ where
                     (None, Some(err)) => return err.poll_unpin(cx),
                     (Some(ev), None) => return ev.poll_unpin(cx),
                     (Some(ev), Some(err)) => {
-                        let ev = ev.poll_unpin(cx).is_ready();
-                        let err = err.poll_unpin(cx).is_ready();
-                        if ev && err {
-                            return Poll::Ready(Ok(()));
-                        } else if ev {
-                            event_task = None;
-                        } else if err {
-                            stderr_task = None;
+                        let ev = ev.poll_unpin(cx);
+                        let err = err.poll_unpin(cx);
+                        match (ev, err) {
+                            (Poll::Ready(Err(e)), _) => return Poll::Ready(Err(e)),
+                            (_, Poll::Ready(Err(e))) => return Poll::Ready(Err(e)),
+                            (Poll::Ready(Ok(_)), Poll::Ready(Ok(_))) => return Poll::Ready(Ok(())),
+                            (Poll::Ready(Ok(_)), _) => event_task = None,
+                            (_, Poll::Ready(Ok(_))) => stderr_task = None,
+                            _ => {}
                         }
                     }
                 }
