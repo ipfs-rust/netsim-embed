@@ -17,6 +17,7 @@ jobs:
     env:
       RUST_BACKTRACE: 1
       CARGO_INCREMENTAL: 0
+      RUST_LOG: debug
 
     runs-on: ${{ matrix.platform.host }}
     steps:
