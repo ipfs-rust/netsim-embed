@@ -8,87 +8,88 @@ jobs:
       fail-fast: false
       matrix:
         toolchain:
-        - rust: stable
+          - rust: stable
         #- rust: nightly
         platform:
-        - target: x86_64-unknown-linux-gnu
-          host: ubuntu-latest
-          cross: false
+          - target: x86_64-unknown-linux-gnu
+            host: ubuntu-latest
+            cross: false
     env:
       RUST_BACKTRACE: 1
       CARGO_INCREMENTAL: 0
+      RUST_LOG: debug
 
     runs-on: ${{ matrix.platform.host }}
     steps:
-    - name: Checkout sources
-      uses: actions/checkout@v2
+      - name: Checkout sources
+        uses: actions/checkout@v2
 
-    - name: Cache cargo folder
-      uses: actions/cache@v1
-      with:
-        path: ~/.cargo
-        key: ${{ matrix.platform.target }}-cargo-${{ matrix.toolchain.rust }}
+      - name: Cache cargo folder
+        uses: actions/cache@v1
+        with:
+          path: ~/.cargo
+          key: ${{ matrix.platform.target }}-cargo-${{ matrix.toolchain.rust }}
 
-    - name: Install dependencies ubuntu
-      if: matrix.platform.host == 'ubuntu-latest'
-      run: sudo apt-get install iperf net-tools ncat
+      - name: Install dependencies ubuntu
+        if: matrix.platform.host == 'ubuntu-latest'
+        run: sudo apt-get install iperf net-tools ncat
 
-    - name: Install rust toolchain
-      uses: hecrj/setup-rust-action@v1
-      with:
-        rust-version: ${{ matrix.toolchain.rust }}
-        targets: ${{ matrix.platform.target }}
+      - name: Install rust toolchain
+        uses: hecrj/setup-rust-action@v1
+        with:
+          rust-version: ${{ matrix.toolchain.rust }}
+          targets: ${{ matrix.platform.target }}
 
-    - name: Build
-      run: cargo build --all-features --workspace --target ${{ matrix.platform.target }}
+      - name: Build
+        run: cargo build --all-features --workspace --target ${{ matrix.platform.target }}
 
-    - name: Run tests
-      run: cargo test --all-features --workspace
+      - name: Run tests
+        run: cargo test --all-features --workspace
 
-    - name: Build netsim-embed-cli
-      run: cargo build -p netsim-embed-cli
+      - name: Build netsim-embed-cli
+        run: cargo build -p netsim-embed-cli
 
-    - name: Run tcp example
-      run: cd ./target/debug && ./netsim-embed-cli --client ./examples/tcp_client --server ./examples/tcp_server --topology m2
+      - name: Run tcp example
+        run: cd ./target/debug && ./netsim-embed-cli --client ./examples/tcp_client --server ./examples/tcp_server --topology m2
 
-    - name: Run udp example
-      run: cd ./target/debug && ./netsim-embed-cli --client ./examples/udp_client --server ./examples/udp_server --topology m2
+      - name: Run udp example
+        run: cd ./target/debug && ./netsim-embed-cli --client ./examples/udp_client --server ./examples/udp_server --topology m2
 
-    - name: Run udp gso example
-      run: cd ./target/debug && ./netsim-embed-cli --client ./examples/udp_gso_client --server ./examples/udp_gso_server --topology m2
+      - name: Run udp gso example
+        run: cd ./target/debug && ./netsim-embed-cli --client ./examples/udp_gso_client --server ./examples/udp_gso_server --topology m2
 
-    - name: Run udp broadcast example
-      run: cd ./target/debug && ./netsim-embed-cli --client ./examples/broadcast_client --server ./examples/broadcast_server --topology m2
+      - name: Run udp broadcast example
+        run: cd ./target/debug && ./netsim-embed-cli --client ./examples/broadcast_client --server ./examples/broadcast_server --topology m2
 
-    - name: Run iperf example
-      run: cd ./target/debug && ./netsim-embed-cli --client ./examples/iperf_client --server ./examples/iperf_server --topology m2
+      # - name: Run iperf example
+      #   run: cd ./target/debug && ./netsim-embed-cli --client ./examples/iperf_client --server ./examples/iperf_server --topology m2 --timeout-s 40
 
-    - name: Run ifwatch example
-      run: ./target/debug/examples/if_watch_runner
+      - name: Run ifwatch example
+        run: ./target/debug/examples/if_watch_runner
 
-    - name: Run netcat_host example
-      run: ./target/debug/examples/netcat_host
+      - name: Run netcat_host example
+        run: ./target/debug/examples/netcat_host
 
   lint-rust:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout sources
-      uses: actions/checkout@v2
+      - name: Checkout sources
+        uses: actions/checkout@v2
 
-    - name: Cache cargo folder
-      uses: actions/cache@v1
-      with:
-        path: ~/.cargo
-        key: lint-cargo
+      - name: Cache cargo folder
+        uses: actions/cache@v1
+        with:
+          path: ~/.cargo
+          key: lint-cargo
 
-    - name: Install rust toolchain
-      uses: hecrj/setup-rust-action@v1
-      with:
-        rust-version: stable
-        components: clippy, rustfmt
+      - name: Install rust toolchain
+        uses: hecrj/setup-rust-action@v1
+        with:
+          rust-version: stable
+          components: clippy, rustfmt
 
-    - name: cargo fmt
-      run: cargo fmt --all -- --check
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
 
-    - name: cargo clippy
-      run: cargo clippy --workspace --examples --tests --all-features -- -D warnings
+      - name: cargo clippy
+        run: cargo clippy --workspace --examples --tests --all-features -- -D warnings

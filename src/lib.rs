@@ -1,4 +1,5 @@
 use async_process::Command;
+use dlopen::raw::AddressInfoObtainer;
 use futures::prelude::*;
 pub use libpacket::*;
 use netsim_embed_core::*;
@@ -69,6 +70,22 @@ where
 
     pub fn machines_mut(&mut self) -> &mut [Machine<C, E>] {
         &mut self.machines
+    }
+
+    #[cfg(feature = "ipc")]
+    pub async fn spawn<T: 'static + Send>(
+        &mut self,
+        function: fn(ipc_channel::ipc::IpcReceiver<T>),
+    ) -> (MachineId, ipc_channel::ipc::IpcSender<T>) {
+        let name = get_fn_name(function);
+        let (server, server_name) = ipc_channel::ipc::IpcOneShotServer::new().unwrap();
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        command.args(["--netsim-embed-internal-call", &name, &server_name]);
+        let machine = self.spawn_machine(command, None).await;
+        let (_, ipc) = async_global_executor::spawn_blocking(|| server.accept())
+            .await
+            .unwrap();
+        (machine, ipc)
     }
 
     pub async fn spawn_machine(
@@ -188,6 +205,16 @@ where
     }
 }
 
+#[cfg(feature = "ipc")]
+pub fn get_fn_name<T>(function: fn(ipc_channel::ipc::IpcReceiver<T>)) -> String {
+    let info = AddressInfoObtainer::new()
+        .obtain(function as *const ())
+        .expect("look up existing function pointer");
+    info.overlapping_symbol
+        .expect("cannot find function symbol: have you used #[no_mangle] for machine definitions and emitted `cargo:rustc-link-arg-tests=-rdynamic` from build.rs?")
+        .name
+}
+
 #[derive(Debug)]
 pub struct Network {
     id: NetworkId,
@@ -229,4 +256,77 @@ pub struct NatConfig {
     pub blacklist_unrecognized_addrs: bool,
     pub restrict_endpoints: bool,
     pub forward_ports: Vec<(Protocol, u16, SocketAddrV4)>,
+}
+
+#[allow(clippy::needless_doctest_main)]
+/// Dispatch spawned machine invocations to their declared functions.
+///
+/// Each function must be annotated with `#[no_mangle]` so that the symbol is exported,
+/// and the current executable must be linked with `-rdynamic` to add these symbols to
+/// the dynamic symbol table. The latter is best done with a `build.rs` like this:
+///
+/// ```no_run
+/// fn main() {
+///     println!("cargo:rustc-link-arg-tests=-rdynamic");
+/// }
+/// ```
+#[cfg(feature = "ipc")]
+#[macro_export]
+macro_rules! declare_machines {
+    ( $($fn:path),* ) => {{
+        let mut args = std::env::args();
+        args.next();
+        if args.next().map(|v| v == "--netsim-embed-internal-call").unwrap_or(false) {
+            let function = args.next().unwrap();
+            let server_name = args.next().unwrap();
+            $(
+                if function == $crate::get_fn_name($fn) {
+                    let (sender, receiver) = $crate::test_util::ipc::channel().unwrap();
+                    let server_sender = $crate::test_util::ipc::IpcSender::connect(server_name).unwrap();
+                    server_sender.send(sender).unwrap();
+                    $fn(receiver);
+                    std::process::exit(0);
+                }
+            )*
+            panic!("Got a netsim-embed internal call with an unknown function name")
+        }
+    }}
+}
+
+#[cfg(feature = "ipc")]
+pub mod test_util {
+    pub struct TestResult(anyhow::Result<()>);
+    impl TestResult {
+        pub fn into_inner(self) -> anyhow::Result<()> {
+            self.0
+        }
+    }
+    impl From<()> for TestResult {
+        fn from(_: ()) -> Self {
+            Self(Ok(()))
+        }
+    }
+    impl<E: std::error::Error + Send + Sync + 'static> From<Result<(), E>> for TestResult {
+        fn from(res: Result<(), E>) -> Self {
+            Self(res.map_err(Into::into))
+        }
+    }
+    pub use ipc_channel::ipc;
+    pub use libtest_mimic::{run, Arguments, Trial};
+}
+
+#[cfg(feature = "ipc")]
+#[macro_export]
+macro_rules! run_tests {
+    ( $($fn:path),* ) => {{
+        $crate::unshare_user().unwrap();
+        let args = $crate::test_util::Arguments::from_args();
+        let tests = vec![
+            $($crate::test_util::Trial::test(stringify!($fn), || {
+                $crate::test_util::TestResult::from($fn()).into_inner()?;
+                Ok(())
+            })),*
+        ];
+        $crate::test_util::run(&args, tests).exit();
+    }};
 }

@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_process::Command;
 use async_trait::async_trait;
 use netsim_embed_cli::{run_client, Client};
@@ -16,7 +16,7 @@ impl Client for IperfClient {
             .arg("1M")
             .arg("-m")
             .spawn()
-            .unwrap()
+            .with_context(|| "running iperf")?
             .status()
             .await
             .unwrap();

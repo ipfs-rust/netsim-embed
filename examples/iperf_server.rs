@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_process::{Child, Command};
 use async_trait::async_trait;
 use netsim_embed_cli::{run_server, Server};
@@ -15,7 +15,8 @@ impl Server for IperfServer {
             .arg("-w")
             .arg("1M")
             .arg("-m")
-            .spawn()?;
+            .spawn()
+            .with_context(|| "running iperf")?;
         Ok(Self { child })
     }
 

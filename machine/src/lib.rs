@@ -17,19 +17,27 @@ mod namespace;
 pub use namespace::{unshare_user, Namespace};
 
 use async_process::Command;
-use futures::channel::{mpsc, oneshot};
-use futures::future::FutureExt;
-use futures::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use futures::sink::SinkExt;
-use futures::stream::{FusedStream, StreamExt};
+use async_std::future::timeout;
+use futures::{
+    channel::{mpsc, oneshot},
+    future::{FusedFuture, FutureExt},
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    sink::SinkExt,
+    stream::{FusedStream, StreamExt},
+};
 use netsim_embed_core::{Ipv4Range, Packet, Plug};
-use std::collections::VecDeque;
-use std::fmt::{self, Display};
-use std::io::{Error, ErrorKind, Result, Write};
-use std::net::Ipv4Addr;
-use std::process::Stdio;
-use std::str::FromStr;
-use std::thread;
+use std::{
+    collections::VecDeque,
+    fmt::{self, Display},
+    future::{pending, poll_fn},
+    io::{Error, ErrorKind, Result, Write},
+    net::Ipv4Addr,
+    process::Stdio,
+    str::FromStr,
+    task::Poll,
+    thread,
+    time::Duration,
+};
 
 #[derive(Debug)]
 enum IfaceCtrl {
@@ -399,8 +407,44 @@ where
                 res = command_task => res?,
                 res = event_task => res?,
                 res = stderr_task => res?,
-            }
-            child.kill()
+            };
+            log::info!("{} killing", id);
+            child.kill()?;
+            let deadline = timeout(Duration::from_secs(3), pending::<()>());
+            futures::pin_mut!(deadline);
+            let mut event_task = (!event_task.is_terminated()).then_some(event_task);
+            let mut stderr_task = (!stderr_task.is_terminated()).then_some(stderr_task);
+            poll_fn(|cx| {
+                if deadline.poll_unpin(cx).is_ready() {
+                    log::warn!(
+                        "{} ev: {} err: {}",
+                        id,
+                        event_task.is_some(),
+                        stderr_task.is_some()
+                    );
+                    return Poll::Ready(Err(ErrorKind::TimedOut.into()));
+                }
+                match (&mut event_task, &mut stderr_task) {
+                    (None, None) => return Poll::Ready(Ok(())),
+                    (None, Some(err)) => return err.poll_unpin(cx),
+                    (Some(ev), None) => return ev.poll_unpin(cx),
+                    (Some(ev), Some(err)) => {
+                        let ev = ev.poll_unpin(cx);
+                        let err = err.poll_unpin(cx);
+                        match (ev, err) {
+                            (Poll::Ready(Err(e)), _) => return Poll::Ready(Err(e)),
+                            (_, Poll::Ready(Err(e))) => return Poll::Ready(Err(e)),
+                            (Poll::Ready(Ok(_)), Poll::Ready(Ok(_))) => return Poll::Ready(Ok(())),
+                            (Poll::Ready(Ok(_)), _) => event_task = None,
+                            (_, Poll::Ready(Ok(_))) => stderr_task = None,
+                            _ => {}
+                        }
+                    }
+                }
+                Poll::Pending
+            })
+            .await?;
+            Ok(())
         });
         log::info!("{}'s event loop yielded with {:?}", id, res);
         res

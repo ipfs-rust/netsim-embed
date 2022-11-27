@@ -142,7 +142,7 @@ impl Ipv4Nat {
                             private_dest_addr,
                         );
                         packet.set_checksum();
-                        let _ = self.private_plug.unbounded_send(bytes);
+                        self.private_plug.unbounded_send(bytes);
                     } else {
                         packet.set_source(external_source_addr);
                         log::trace!(
@@ -152,7 +152,7 @@ impl Ipv4Nat {
                             external_source_addr,
                         );
                         packet.set_checksum();
-                        let _ = self.public_plug.unbounded_send(bytes);
+                        self.public_plug.unbounded_send(bytes);
                     }
                 }
             }
@@ -219,7 +219,7 @@ impl Ipv4Nat {
                             private_dest_addr,
                         );
                         packet.set_checksum();
-                        let _ = self.private_plug.unbounded_send(bytes);
+                        self.private_plug.unbounded_send(bytes);
                     } else if self.blacklist_unrecognized_addrs {
                         log::info!(
                             "nat {}: blacklisting unknown address {}.",

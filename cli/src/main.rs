@@ -1,3 +1,4 @@
+use async_std::future::timeout;
 use netsim_embed::{run, DelayBuffer, Ipv4Range, NatConfig, Netsim};
 use netsim_embed_cli::{Command, Event};
 use std::path::PathBuf;
@@ -14,6 +15,8 @@ pub struct Opts {
     server: PathBuf,
     #[structopt(long)]
     delay_ms: Option<u64>,
+    #[structopt(long, default_value = "10")]
+    timeout_s: u64,
 }
 
 fn main() {
@@ -66,5 +69,10 @@ fn main() {
                 break;
             }
         }
+        timeout(Duration::from_secs(opts.timeout_s), client.recv())
+            .await
+            .unwrap();
+        server.send(Command::Finish);
+        client.send(Command::Finish);
     });
 }

@@ -1,14 +1,24 @@
 use async_process::Command;
-use netsim_embed::{run, Ipv4Range, Namespace, Netsim};
-use std::net::Ipv4Addr;
-use std::path::PathBuf;
+use async_std::future::timeout;
+use netsim_embed::{run, Ipv4Range, Machine, Namespace, Netsim};
+use std::{
+    collections::BTreeSet, iter::FromIterator, net::Ipv4Addr, path::PathBuf, time::Duration,
+};
 
 async fn ping(ns: Namespace, addr: Ipv4Addr) {
-    let mut cmd = Command::new("nsenter");
-    cmd.arg(format!("--net={}", ns));
-    cmd.arg("ping");
-    cmd.arg("-c").arg(4.to_string()).arg(addr.to_string());
-    cmd.status().await.unwrap();
+    Command::new("nsenter")
+        .args([
+            format!("--net={}", ns),
+            "ping".to_owned(),
+            "-c".to_owned(),
+            4.to_string(),
+            "-i".to_owned(),
+            "0.1".to_string(),
+            addr.to_string(),
+        ])
+        .status()
+        .await
+        .unwrap();
 }
 
 fn exe(name: &str) -> PathBuf {
@@ -17,6 +27,25 @@ fn exe(name: &str) -> PathBuf {
         .parent()
         .unwrap()
         .join(name)
+}
+
+async fn recv(machine: &mut Machine<String, String>, mut n: usize) -> BTreeSet<String> {
+    let mut result = BTreeSet::new();
+    while n > 0 {
+        match timeout(Duration::from_secs(3), machine.recv()).await {
+            Ok(Some(s)) => {
+                if s.ends_with("/32") {
+                    // ignore: intermediate state between setting addr and netmask
+                } else {
+                    n -= 1;
+                    result.insert(s);
+                }
+            }
+            Ok(None) => panic!("machine exited"),
+            Err(e) => panic!("error: {}", e),
+        }
+    }
+    result
 }
 
 fn main() {
@@ -38,48 +67,28 @@ fn main() {
         sim.plug(watcher, net, Some(addr1)).await;
         sim.plug(pinger, net, None).await;
         assert_eq!(
-            sim.machine(watcher).recv().await,
-            Some("<up 127.0.0.1/8".into())
-        );
-        assert_eq!(
-            sim.machine(watcher).recv().await,
-            Some(format!("<up {}/0", addr1))
+            recv(sim.machine(watcher), 2).await,
+            BTreeSet::from_iter(["<up 127.0.0.1/8".to_owned(), format!("<up {}/0", addr1)])
         );
         ping(sim.machine(pinger).namespace(), addr1).await;
         sim.plug(watcher, net, Some(addr2)).await;
         assert_eq!(
-            sim.machine(watcher).recv().await,
-            Some(format!("<down {}/0", addr1))
+            recv(sim.machine(watcher), 1).await,
+            BTreeSet::from_iter([format!("<down {}/0", addr1),])
         );
         assert_eq!(
-            sim.machine(watcher).recv().await,
-            Some(format!("<up {}/32", addr2))
-        );
-        assert_eq!(
-            sim.machine(watcher).recv().await,
-            Some(format!("<down {}/32", addr2))
-        );
-        assert_eq!(
-            sim.machine(watcher).recv().await,
-            Some(format!("<up {}/0", addr2))
+            recv(sim.machine(watcher), 1).await,
+            BTreeSet::from_iter([format!("<up {}/0", addr2),])
         );
         ping(sim.machine(pinger).namespace(), addr2).await;
         sim.plug(watcher, net, Some(addr3)).await;
         assert_eq!(
-            sim.machine(watcher).recv().await,
-            Some(format!("<down {}/0", addr2))
+            recv(sim.machine(watcher), 1).await,
+            BTreeSet::from_iter([format!("<down {}/0", addr2),])
         );
         assert_eq!(
-            sim.machine(watcher).recv().await,
-            Some(format!("<up {}/32", addr3))
-        );
-        assert_eq!(
-            sim.machine(watcher).recv().await,
-            Some(format!("<down {}/32", addr3))
-        );
-        assert_eq!(
-            sim.machine(watcher).recv().await,
-            Some(format!("<up {}/0", addr3))
+            recv(sim.machine(watcher), 1).await,
+            BTreeSet::from_iter([format!("<up {}/0", addr3),])
         );
     });
 }
