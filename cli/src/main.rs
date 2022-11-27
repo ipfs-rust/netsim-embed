@@ -1,3 +1,4 @@
+use async_std::future::timeout;
 use netsim_embed::{run, DelayBuffer, Ipv4Range, NatConfig, Netsim};
 use netsim_embed_cli::{Command, Event};
 use std::path::PathBuf;
@@ -66,5 +67,10 @@ fn main() {
                 break;
             }
         }
+        timeout(Duration::from_secs(20), client.recv())
+            .await
+            .unwrap();
+        server.send(Command::Finish);
+        client.send(Command::Finish);
     });
 }
