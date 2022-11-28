@@ -1,5 +1,4 @@
 use async_process::Command;
-use dlopen::raw::AddressInfoObtainer;
 use futures::prelude::*;
 pub use libpacket::*;
 use netsim_embed_core::*;
@@ -207,7 +206,7 @@ where
 
 #[cfg(feature = "ipc")]
 pub fn get_fn_name<T>(function: fn(ipc_channel::ipc::IpcReceiver<T>)) -> String {
-    let info = AddressInfoObtainer::new()
+    let info = dlopen::raw::AddressInfoObtainer::new()
         .obtain(function as *const ())
         .expect("look up existing function pointer");
     info.overlapping_symbol

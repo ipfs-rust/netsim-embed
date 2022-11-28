@@ -11,13 +11,13 @@ license = "MIT"
 repository = "https://github.com/ipfs-rust/netsim-embed"
 
 [features]
-ipc = ["dep:libtest-mimic", "dep:anyhow", "dep:ipc-channel"]
+ipc = ["dep:libtest-mimic", "dep:anyhow", "dep:ipc-channel", "dep:dlopen"]
 
 [dependencies]
 anyhow = { version = "1.0.40", optional = true }
 async-global-executor = "2.0.2"
 async-process = "1.0.2"
-dlopen = "0.1.8"
+dlopen = { version = "0.1.8", optional = true }
 futures = "0.3.13"
 ipc-channel = { version = "0.16.0", optional = true }
 libpacket = "0.1.0"
