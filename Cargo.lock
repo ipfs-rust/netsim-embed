@@ -910,8 +910,10 @@ dependencies = [
  "netsim-embed-cli",
  "netsim-embed-core",
  "netsim-embed-machine",
+ "netsim-embed-macros",
  "netsim-embed-nat",
  "netsim-embed-router",
+ "serde",
  "udp-socket",
 ]
 
@@ -955,6 +957,15 @@ dependencies = [
  "libc",
  "log",
  "netsim-embed-core",
+]
+
+[[package]]
+name = "netsim-embed-macros"
+version = "0.1.0"
+dependencies = [
+ "quote 1.0.21",
+ "rand 0.8.5",
+ "syn 1.0.104",
 ]
 
 [[package]]
