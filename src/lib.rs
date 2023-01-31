@@ -72,19 +72,23 @@ where
     }
 
     #[cfg(feature = "ipc")]
-    pub async fn spawn<T: 'static + Send>(
-        &mut self,
-        function: fn(ipc_channel::ipc::IpcReceiver<T>),
-    ) -> (MachineId, ipc_channel::ipc::IpcSender<T>) {
-        let name = get_fn_name(function);
-        let (server, server_name) = ipc_channel::ipc::IpcOneShotServer::new().unwrap();
+    pub async fn spawn<M: MachineFn>(&mut self, _machine: M, arg: M::Arg) -> MachineId {
+        use ipc_channel::ipc;
+        let id = M::id();
+        let (server, server_name) = ipc::IpcOneShotServer::<ipc::IpcSender<M::Arg>>::new().unwrap();
         let mut command = Command::new(std::env::current_exe().unwrap());
-        command.args(["--netsim-embed-internal-call", &name, &server_name]);
+        command.args([
+            "--netsim-embed-internal-call",
+            &format!("{}", id),
+            &server_name,
+        ]);
         let machine = self.spawn_machine(command, None).await;
         let (_, ipc) = async_global_executor::spawn_blocking(|| server.accept())
             .await
             .unwrap();
-        (machine, ipc)
+        ipc.send(arg)
+            .expect("Failed sending argument to child process");
+        machine
     }
 
     pub async fn spawn_machine(
@@ -204,16 +208,6 @@ where
     }
 }
 
-#[cfg(feature = "ipc")]
-pub fn get_fn_name<T>(function: fn(ipc_channel::ipc::IpcReceiver<T>)) -> String {
-    let info = dlopen::raw::AddressInfoObtainer::new()
-        .obtain(function as *const ())
-        .expect("look up existing function pointer");
-    info.overlapping_symbol
-        .expect("cannot find function symbol: have you used #[no_mangle] for machine definitions and emitted `cargo:rustc-link-arg-tests=-rdynamic` from build.rs?")
-        .name
-}
-
 #[derive(Debug)]
 pub struct Network {
     id: NetworkId,
@@ -257,6 +251,16 @@ pub struct NatConfig {
     pub forward_ports: Vec<(Protocol, u16, SocketAddrV4)>,
 }
 
+#[cfg(feature = "ipc")]
+pub trait MachineFn {
+    type Arg: 'static + Send + serde::Serialize;
+    fn id() -> u128;
+    fn call(arg: Self::Arg);
+}
+
+#[cfg(feature = "ipc")]
+pub use netsim_embed_macros::machine;
+
 #[allow(clippy::needless_doctest_main)]
 /// Dispatch spawned machine invocations to their declared functions.
 ///
@@ -272,18 +276,19 @@ pub struct NatConfig {
 #[cfg(feature = "ipc")]
 #[macro_export]
 macro_rules! declare_machines {
-    ( $($fn:path),* ) => {{
+    ( $($machine:path),* ) => {{
         let mut args = std::env::args();
         args.next();
         if args.next().map(|v| v == "--netsim-embed-internal-call").unwrap_or(false) {
             let function = args.next().unwrap();
             let server_name = args.next().unwrap();
+            let function: u128 = function.parse().expect("Got a non-integer function to call");
             $(
-                if function == $crate::get_fn_name($fn) {
+                if function == <$machine as $crate::MachineFn>::id() {
                     let (sender, receiver) = $crate::test_util::ipc::channel().unwrap();
                     let server_sender = $crate::test_util::ipc::IpcSender::connect(server_name).unwrap();
                     server_sender.send(sender).unwrap();
-                    $fn(receiver);
+                    <$machine as $crate::MachineFn>::call(receiver.recv().expect("Failed receiving argument from main process"));
                     std::process::exit(0);
                 }
             )*
