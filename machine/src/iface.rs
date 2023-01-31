@@ -123,11 +123,7 @@ impl Iface {
     pub fn new() -> Result<Self, io::Error> {
         // create loopback interface
         unsafe {
-            let fd = errno!(libc::socket(
-                libc::AF_INET,
-                libc::SOCK_STREAM,
-                0
-            ))?;
+            let fd = errno!(libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0))?;
             let lo = CString::new("lo")?;
 
             let mut req = ioctl::ifreq::new(&lo);
@@ -205,11 +201,7 @@ impl Iface {
     /// Set an interface IPv4 address and netmask.
     pub fn set_ipv4_addr(&self, ipv4_addr: Ipv4Addr, netmask_bits: u8) -> Result<(), io::Error> {
         unsafe {
-            let fd = errno!(libc::socket(
-                libc::AF_INET,
-                libc::SOCK_DGRAM,
-                0
-            ))?;
+            let fd = errno!(libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0))?;
             let mut req = ioctl::ifreq::new(self.name());
             req.set_ifru_addr(ipv4_addr);
 
@@ -231,11 +223,7 @@ impl Iface {
     /// Put an interface up.
     pub fn put_up(&self) -> Result<(), io::Error> {
         unsafe {
-            let fd = errno!(libc::socket(
-                libc::AF_INET,
-                libc::SOCK_DGRAM,
-                0
-            ))?;
+            let fd = errno!(libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0))?;
             let mut req = ioctl::ifreq::new(self.name());
 
             if let Err(err) = errno!(ioctl::siocgifflags(fd, &mut req)) {
@@ -255,11 +243,7 @@ impl Iface {
     /// Put an interface down.
     pub fn put_down(&self) -> Result<(), io::Error> {
         unsafe {
-            let fd = errno!(libc::socket(
-                libc::AF_INET,
-                libc::SOCK_DGRAM,
-                0
-            ))?;
+            let fd = errno!(libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0))?;
             let mut req = ioctl::ifreq::new(self.name());
 
             if let Err(err) = errno!(ioctl::siocgifflags(fd, &mut req)) {
