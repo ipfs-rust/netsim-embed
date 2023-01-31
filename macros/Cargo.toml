@@ -2,6 +2,10 @@
 name = "netsim-embed-macros"
 version = "0.1.0"
 edition = "2021"
+authors = ["@ekleog"]
+description = "supporting macros for the 'ipc' feature of netsim-embed"
+license = "MIT"
+repository = "https://github.com/ipfs-rust/netsim-embed"
 
 [lib]
 proc-macro = true
@@ -9,4 +13,4 @@ proc-macro = true
 [dependencies]
 quote = "1.0"
 rand = "0.8.5"
-syn = "1.0"
+syn = { version = "1.0", features = ["full"] }
