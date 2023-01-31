@@ -11,7 +11,7 @@ impl Client for IperfClient {
     async fn run(&mut self, addr: Ipv4Addr) -> Result<()> {
         Command::new("iperf")
             .arg("-c")
-            .arg(format!("{}", addr))
+            .arg(format!("{addr}"))
             .arg("-w")
             .arg("1M")
             .arg("-m")

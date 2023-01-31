@@ -124,8 +124,8 @@ impl Iface {
         // create loopback interface
         unsafe {
             let fd = errno!(libc::socket(
-                libc::AF_INET as i32,
-                libc::SOCK_STREAM as i32,
+                libc::AF_INET,
+                libc::SOCK_STREAM,
                 0
             ))?;
             let lo = CString::new("lo")?;
@@ -206,8 +206,8 @@ impl Iface {
     pub fn set_ipv4_addr(&self, ipv4_addr: Ipv4Addr, netmask_bits: u8) -> Result<(), io::Error> {
         unsafe {
             let fd = errno!(libc::socket(
-                libc::AF_INET as i32,
-                libc::SOCK_DGRAM as i32,
+                libc::AF_INET,
+                libc::SOCK_DGRAM,
                 0
             ))?;
             let mut req = ioctl::ifreq::new(self.name());
@@ -232,8 +232,8 @@ impl Iface {
     pub fn put_up(&self) -> Result<(), io::Error> {
         unsafe {
             let fd = errno!(libc::socket(
-                libc::AF_INET as i32,
-                libc::SOCK_DGRAM as i32,
+                libc::AF_INET,
+                libc::SOCK_DGRAM,
                 0
             ))?;
             let mut req = ioctl::ifreq::new(self.name());
@@ -256,8 +256,8 @@ impl Iface {
     pub fn put_down(&self) -> Result<(), io::Error> {
         unsafe {
             let fd = errno!(libc::socket(
-                libc::AF_INET as i32,
-                libc::SOCK_DGRAM as i32,
+                libc::AF_INET,
+                libc::SOCK_DGRAM,
                 0
             ))?;
             let mut req = ioctl::ifreq::new(self.name());
@@ -280,9 +280,9 @@ impl Iface {
     pub fn add_ipv4_route(&self, route: Ipv4Route) -> Result<(), io::Error> {
         unsafe {
             let fd = errno!(libc::socket(
-                libc::PF_INET as i32,
-                libc::SOCK_DGRAM as i32,
-                libc::IPPROTO_IP as i32,
+                libc::PF_INET,
+                libc::SOCK_DGRAM,
+                libc::IPPROTO_IP,
             ))?;
 
             let mut rtentry: libc::rtentry = mem::zeroed();
@@ -299,7 +299,7 @@ impl Iface {
                 s_addr: u32::from(route.dest().netmask()).to_be(),
             };
 
-            rtentry.rt_flags = libc::RTF_UP as u16;
+            rtentry.rt_flags = libc::RTF_UP;
 
             if let Some(gateway_addr) = route.gateway() {
                 let rt_gateway =
@@ -309,7 +309,7 @@ impl Iface {
                     s_addr: u32::from(gateway_addr).to_be(),
                 };
 
-                rtentry.rt_flags |= libc::RTF_GATEWAY as u16;
+                rtentry.rt_flags |= libc::RTF_GATEWAY;
             }
 
             rtentry.rt_dev = self.name.as_ptr() as *mut _;

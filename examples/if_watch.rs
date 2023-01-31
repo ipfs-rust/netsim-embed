@@ -9,15 +9,15 @@ async fn main() -> Result<()> {
         let watcher = &mut watcher;
         match watcher.await? {
             IfEvent::Down(IpNet::V4(ip)) => {
-                println!("down {}", ip);
-                println!("<down {}", ip);
+                println!("down {ip}");
+                println!("<down {ip}");
             }
             IfEvent::Up(IpNet::V4(ip)) => {
-                println!("up {}", ip);
-                println!("<up {}", ip);
+                println!("up {ip}");
+                println!("<up {ip}");
             }
             x => {
-                println!("other event {:?}", x);
+                println!("other event {x:?}");
             }
         }
     }

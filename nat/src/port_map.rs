@@ -11,6 +11,7 @@ pub struct PortMap {
     port_allocator: Box<dyn PortAllocator>,
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for PortMap {
     fn default() -> Self {
         Self {
@@ -18,7 +19,7 @@ impl Default for PortMap {
             map_in: Default::default(),
             allowed_endpoints: Default::default(),
             symmetric_map: Default::default(),
-            port_allocator: Box::new(SequentialPortAllocator::default()),
+            port_allocator: Box::<SequentialPortAllocator>::default(),
         }
     }
 }

@@ -3,7 +3,7 @@ members = ["cli", "core", "machine", "macros", "nat", "router", "."]
 
 [package]
 name = "netsim-embed"
-version = "0.7.2"
+version = "0.8.0"
 authors = ["David Craven <david@craven.ch>"]
 edition = "2018"
 description = "Network simulator."

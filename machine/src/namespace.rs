@@ -9,14 +9,14 @@ pub fn unshare_user() -> Result<(), io::Error> {
     unsafe { errno!(libc::unshare(libc::CLONE_NEWUSER))? };
 
     let mut f = File::create("/proc/self/uid_map")?;
-    let s = format!("0 {} 1\n", uid);
+    let s = format!("0 {uid} 1\n");
     f.write_all(s.as_bytes())?;
 
     let mut f = File::create("/proc/self/setgroups")?;
     f.write_all(b"deny\n")?;
 
     let mut f = File::create("/proc/self/gid_map")?;
-    let s = format!("0 {} 1\n", gid);
+    let s = format!("0 {gid} 1\n");
     f.write_all(s.as_bytes())?;
 
     Ok(())

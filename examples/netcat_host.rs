@@ -13,11 +13,11 @@ fn main() {
         let server = netsim.spawn_machine(server, None).await;
         netsim.plug(server, net1, None).await;
         let server_addr = netsim.machine(server).addr();
-        println!("Server Addr {}:4242", server_addr);
+        println!("Server Addr {server_addr}:4242");
 
         let _ns = Namespace::current().unwrap();
         let ns_server = netsim.machine(server).namespace();
-        println!("{}", ns_server);
+        println!("{ns_server}");
         netsim.machine(server).namespace().enter().unwrap();
 
         let mut cmd = Command::new("nc");

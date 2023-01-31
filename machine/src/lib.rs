@@ -238,7 +238,7 @@ fn abbrev<T: Display>(t: &T, limit: usize, cut_len: usize) -> String {
         }
     }
     let mut writer = S(String::with_capacity(limit), 0);
-    write!(writer, "{}", t).unwrap();
+    write!(writer, "{t}").unwrap();
     let S(mut result, length) = writer;
     if length > limit {
         let mut cut = cut_len;
@@ -246,7 +246,7 @@ fn abbrev<T: Display>(t: &T, limit: usize, cut_len: usize) -> String {
             cut -= 1;
         }
         result.truncate(cut);
-        write!(&mut result, "... ({} bytes)", length).unwrap();
+        write!(&mut result, "... ({length} bytes)").unwrap();
     }
     result
 }
@@ -355,7 +355,7 @@ where
                 while let Some(cmd) = cmd.next().await {
                     buf.clear();
                     log::debug!("{} {}", id, abbrev(&cmd, 2000, 80));
-                    writeln!(buf, "{}", cmd)?;
+                    writeln!(buf, "{cmd}")?;
                     stdin.write_all(&buf).await?;
                 }
                 log::info!("{} (command): closed", id);
@@ -377,7 +377,7 @@ where
                             break;
                         }
                     } else {
-                        println!("{} (stdout): {}", id, ev);
+                        println!("{id} (stdout): {ev}");
                     }
                 }
                 log::info!("{} (stdout): closed", id);
@@ -389,7 +389,7 @@ where
             let stderr_task = async {
                 while let Some(ev) = stderr.next().await {
                     let ev = ev?;
-                    println!("{} (stderr): {}", id, ev);
+                    println!("{id} (stderr): {ev}");
                 }
                 log::info!("{} (stderr): closed", id);
                 Result::Ok(())

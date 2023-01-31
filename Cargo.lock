@@ -890,7 +890,7 @@ dependencies = [
 
 [[package]]
 name = "netsim-embed"
-version = "0.7.2"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "async-global-executor",

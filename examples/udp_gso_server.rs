@@ -25,7 +25,7 @@ impl Server for UdpServer {
             println!("receiving");
             self.socket.recv(&mut buffer, &mut meta).await?;
             let slice = &buffer[0][..meta[0].len];
-            println!("received {:?}", slice);
+            println!("received {slice:?}");
         }
         Ok(())
     }

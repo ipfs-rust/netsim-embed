@@ -8,7 +8,7 @@ use std::{
 async fn ping(ns: Namespace, addr: Ipv4Addr) {
     Command::new("nsenter")
         .args([
-            format!("--net={}", ns),
+            format!("--net={ns}"),
             "ping".to_owned(),
             "-c".to_owned(),
             4.to_string(),
@@ -68,27 +68,27 @@ fn main() {
         sim.plug(pinger, net, None).await;
         assert_eq!(
             recv(sim.machine(watcher), 2).await,
-            BTreeSet::from_iter(["<up 127.0.0.1/8".to_owned(), format!("<up {}/0", addr1)])
+            BTreeSet::from_iter(["<up 127.0.0.1/8".to_owned(), format!("<up {addr1}/0")])
         );
         ping(sim.machine(pinger).namespace(), addr1).await;
         sim.plug(watcher, net, Some(addr2)).await;
         assert_eq!(
             recv(sim.machine(watcher), 1).await,
-            BTreeSet::from_iter([format!("<down {}/0", addr1),])
+            BTreeSet::from_iter([format!("<down {addr1}/0"),])
         );
         assert_eq!(
             recv(sim.machine(watcher), 1).await,
-            BTreeSet::from_iter([format!("<up {}/0", addr2),])
+            BTreeSet::from_iter([format!("<up {addr2}/0"),])
         );
         ping(sim.machine(pinger).namespace(), addr2).await;
         sim.plug(watcher, net, Some(addr3)).await;
         assert_eq!(
             recv(sim.machine(watcher), 1).await,
-            BTreeSet::from_iter([format!("<down {}/0", addr2),])
+            BTreeSet::from_iter([format!("<down {addr2}/0"),])
         );
         assert_eq!(
             recv(sim.machine(watcher), 1).await,
-            BTreeSet::from_iter([format!("<up {}/0", addr3),])
+            BTreeSet::from_iter([format!("<up {addr3}/0"),])
         );
     });
 }

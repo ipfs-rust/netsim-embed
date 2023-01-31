@@ -79,7 +79,7 @@ where
         let mut command = Command::new(std::env::current_exe().unwrap());
         command.args([
             "--netsim-embed-internal-call",
-            &format!("{}", id),
+            &format!("{id}"),
             &server_name,
         ]);
         let machine = self.spawn_machine(command, None).await;
