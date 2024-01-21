@@ -1,6 +1,6 @@
 [package]
 name = "netsim-embed-core"
-version = "0.4.2"
+version = "0.4.3"
 authors = ["David Craven <david@craven.ch>"]
 edition = "2018"
 description = "Core types for netsim embed."
@@ -8,12 +8,12 @@ license = "MIT"
 repository = "https://github.com/ipfs-rust/netsim-embed"
 
 [dependencies]
-async-global-executor = "2.0.2"
-async-io = "1.3.1"
-futures = "0.3.13"
-libpacket = "0.1.0"
-rand = "0.8.3"
-thiserror = "1.0.24"
+async-global-executor = "2.3.1"
+async-io = "1.13.0"
+futures = "0.3.27"
+libpacket = "0.1.2"
+rand = "0.8.5"
+thiserror = "1.0.40"
 
 [dev-dependencies]
-async-std = { version = "1.9.0", features = ["attributes"] }
+async-std = { version = "1.12.0", features = ["attributes"] }

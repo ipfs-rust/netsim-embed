@@ -1,6 +1,6 @@
 [package]
 name = "netsim-embed-router"
-version = "0.4.5"
+version = "0.4.6"
 authors = ["David Craven <david@craven.ch>"]
 edition = "2018"
 description = "Implementation of a router for netsim embed."
@@ -8,8 +8,8 @@ license = "MIT"
 repository = "https://github.com/ipfs-rust/netsim-embed"
 
 [dependencies]
-async-global-executor = "2.0.2"
-futures = "0.3.13"
-libpacket = "0.1.0"
-log = "0.4.14"
-netsim-embed-core = { version = "0.4.0", path = "../core" }
+async-global-executor = "2.3.1"
+futures = "0.3.27"
+libpacket = "0.1.2"
+log = "0.4.17"
+netsim-embed-core = { version = "0.4.3", path = "../core" }
