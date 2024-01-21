@@ -9,7 +9,7 @@ use std::{
     net::Ipv4Addr,
     sync::{
         atomic::{AtomicUsize, Ordering},
-        Arc,
+        Arc, Mutex,
     },
     task::Poll,
 };
@@ -31,12 +31,26 @@ pub struct Ipv4Router {
     counters: Arc<Counters>,
 }
 
-#[derive(Debug, Default)]
+pub type Filter = Box<dyn Fn(&[u8]) -> bool + Send + Sync + 'static>;
+
+#[derive(Default)]
 struct Counters {
+    filter: Mutex<Option<Filter>>,
     forwarded: AtomicUsize,
     invalid: AtomicUsize,
     disabled: AtomicUsize,
     unroutable: AtomicUsize,
+}
+
+impl std::fmt::Debug for Counters {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Counters")
+            .field("forwarded", &self.forwarded)
+            .field("invalid", &self.invalid)
+            .field("disabled", &self.disabled)
+            .field("unroutable", &self.unroutable)
+            .finish()
+    }
 }
 
 impl Ipv4Router {
@@ -65,6 +79,10 @@ impl Ipv4Router {
 
     pub fn unroutable(&self) -> usize {
         self.counters.unroutable.load(Ordering::Relaxed)
+    }
+
+    pub fn set_filter(&self, filter: Option<Filter>) {
+        *self.counters.filter.lock().unwrap() = filter;
     }
 
     pub fn add_connection(&self, id: usize, plug: Plug, routes: Vec<Ipv4Route>) {
@@ -153,10 +171,13 @@ fn forward_packet(
     conns: &mut [(usize, Plug, Vec<Ipv4Route>, bool)],
     bytes: Vec<u8>,
 ) {
+    let count = counters.filter.lock().unwrap().iter().all(|f| f(&bytes));
     let packet = if let Some(packet) = Ipv4Packet::new(&bytes) {
         packet
     } else {
-        counters.invalid.fetch_add(1, Ordering::Relaxed);
+        if count {
+            counters.invalid.fetch_add(1, Ordering::Relaxed);
+        }
         log::info!("router {}: dropping invalid ipv4 packet", addr);
         return;
     };
@@ -170,11 +191,15 @@ fn forward_packet(
         for route in routes {
             if route.dest().contains(dest) || dest.is_broadcast() || dest.is_multicast() {
                 if !*en {
-                    counters.disabled.fetch_add(1, Ordering::Relaxed);
+                    if count {
+                        counters.disabled.fetch_add(1, Ordering::Relaxed);
+                    }
                     log::trace!("router {}: route {:?} disabled", addr, route);
                 } else {
-                    counters.forwarded.fetch_add(1, Ordering::Relaxed);
-                    log::trace!("router {}: routing packet on route {:?}", addr, route);
+                    if count {
+                        counters.forwarded.fetch_add(1, Ordering::Relaxed);
+                    }
+                    log::trace!("router {}: routing packet on route {:?}", addr, route,);
                     tx.unbounded_send(bytes.clone());
                     forwarded = true;
                 }
@@ -183,7 +208,9 @@ fn forward_packet(
     }
     if !forwarded {
         let src = packet.get_source();
-        counters.unroutable.fetch_add(1, Ordering::Relaxed);
+        if count {
+            counters.unroutable.fetch_add(1, Ordering::Relaxed);
+        }
         log::debug!(
             "router {}: dropping unroutable packet from {} to {}",
             addr,

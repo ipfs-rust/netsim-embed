@@ -4,6 +4,7 @@ use netsim_embed_core::*;
 pub use netsim_embed_core::{DelayBuffer, Ipv4Range, Protocol};
 pub use netsim_embed_machine::{unshare_user, Machine, MachineId, Namespace};
 use netsim_embed_nat::*;
+pub use netsim_embed_router::Filter;
 use netsim_embed_router::*;
 use std::fmt::Display;
 use std::net::{Ipv4Addr, SocketAddrV4};
@@ -237,6 +238,10 @@ impl Network {
 
     pub fn range(&self) -> Ipv4Range {
         self.range
+    }
+
+    pub fn set_count_filter(&self, filter: Option<Filter>) {
+        self.router.set_filter(filter);
     }
 
     pub fn num_forwarded(&self) -> usize {
