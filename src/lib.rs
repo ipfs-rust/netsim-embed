@@ -1,6 +1,5 @@
 use async_process::Command;
 use futures::prelude::*;
-pub use libpacket::*;
 use netsim_embed_core::*;
 pub use netsim_embed_core::{DelayBuffer, Ipv4Range, Protocol};
 pub use netsim_embed_machine::{unshare_user, Machine, MachineId, Namespace};
@@ -72,7 +71,12 @@ where
     }
 
     #[cfg(feature = "ipc")]
-    pub async fn spawn<M: MachineFn>(&mut self, _machine: M, arg: M::Arg) -> MachineId {
+    pub async fn spawn<M: MachineFn>(
+        &mut self,
+        _machine: M,
+        arg: M::Arg,
+        delay: Option<DelayBuffer>,
+    ) -> MachineId {
         use ipc_channel::ipc;
         let id = M::id();
         let (server, server_name) = ipc::IpcOneShotServer::<ipc::IpcSender<M::Arg>>::new().unwrap();
@@ -82,7 +86,7 @@ where
             &format!("{id}"),
             &server_name,
         ]);
-        let machine = self.spawn_machine(command, None).await;
+        let machine = self.spawn_machine(command, delay).await;
         let (_, ipc) = async_global_executor::spawn_blocking(|| server.accept())
             .await
             .unwrap();
@@ -233,6 +237,22 @@ impl Network {
 
     pub fn range(&self) -> Ipv4Range {
         self.range
+    }
+
+    pub fn num_forwarded(&self) -> usize {
+        self.router.forwarded()
+    }
+
+    pub fn num_invalid(&self) -> usize {
+        self.router.invalid()
+    }
+
+    pub fn num_disabled(&self) -> usize {
+        self.router.disabled()
+    }
+
+    pub fn num_unroutable(&self) -> usize {
+        self.router.unroutable()
     }
 
     pub fn unique_addr(&mut self) -> Ipv4Addr {

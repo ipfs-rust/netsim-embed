@@ -1,10 +1,18 @@
-use futures::channel::{mpsc, oneshot};
-use futures::future::{poll_fn, FutureExt};
-use futures::stream::{FuturesUnordered, StreamExt};
+use futures::{
+    channel::{mpsc, oneshot},
+    future::{poll_fn, FutureExt},
+    stream::{FuturesUnordered, StreamExt},
+};
 use libpacket::ipv4::Ipv4Packet;
 use netsim_embed_core::{Ipv4Route, Plug};
-use std::net::Ipv4Addr;
-use std::task::Poll;
+use std::{
+    net::Ipv4Addr,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+    task::Poll,
+};
 
 #[derive(Debug)]
 #[allow(clippy::enum_variant_names)]
@@ -20,13 +28,43 @@ pub struct Ipv4Router {
     #[allow(unused)]
     addr: Ipv4Addr,
     ctrl: mpsc::UnboundedSender<RouterCtrl>,
+    counters: Arc<Counters>,
+}
+
+#[derive(Debug, Default)]
+struct Counters {
+    forwarded: AtomicUsize,
+    invalid: AtomicUsize,
+    disabled: AtomicUsize,
+    unroutable: AtomicUsize,
 }
 
 impl Ipv4Router {
     pub fn new(addr: Ipv4Addr) -> Self {
         let (tx, rx) = mpsc::unbounded();
-        router(addr, rx);
-        Self { addr, ctrl: tx }
+        let counters = Arc::new(Counters::default());
+        router(addr, Arc::clone(&counters), rx);
+        Self {
+            addr,
+            ctrl: tx,
+            counters,
+        }
+    }
+
+    pub fn forwarded(&self) -> usize {
+        self.counters.forwarded.load(Ordering::Relaxed)
+    }
+
+    pub fn invalid(&self) -> usize {
+        self.counters.invalid.load(Ordering::Relaxed)
+    }
+
+    pub fn disabled(&self) -> usize {
+        self.counters.disabled.load(Ordering::Relaxed)
+    }
+
+    pub fn unroutable(&self) -> usize {
+        self.counters.unroutable.load(Ordering::Relaxed)
     }
 
     pub fn add_connection(&self, id: usize, plug: Plug, routes: Vec<Ipv4Route>) {
@@ -56,7 +94,7 @@ impl Ipv4Router {
     }
 }
 
-fn router(addr: Ipv4Addr, mut ctrl: mpsc::UnboundedReceiver<RouterCtrl>) {
+fn router(addr: Ipv4Addr, counters: Arc<Counters>, mut ctrl: mpsc::UnboundedReceiver<RouterCtrl>) {
     async_global_executor::spawn(async move {
         let mut conns = vec![];
         loop {
@@ -87,7 +125,7 @@ fn router(addr: Ipv4Addr, mut ctrl: mpsc::UnboundedReceiver<RouterCtrl>) {
                     None => break,
                 },
                 incoming = incoming(&mut conns).fuse() => match incoming {
-                    (_, Some(packet)) => forward_packet(addr, &mut conns, packet),
+                    (_, Some(packet)) => forward_packet(addr, &counters, &mut conns, packet),
                     (i, None) => { conns.swap_remove(i); }
                 }
             }
@@ -111,12 +149,14 @@ async fn incoming(conns: &mut [(usize, Plug, Vec<Ipv4Route>, bool)]) -> (usize, 
 
 fn forward_packet(
     addr: Ipv4Addr,
+    counters: &Counters,
     conns: &mut [(usize, Plug, Vec<Ipv4Route>, bool)],
     bytes: Vec<u8>,
 ) {
     let packet = if let Some(packet) = Ipv4Packet::new(&bytes) {
         packet
     } else {
+        counters.invalid.fetch_add(1, Ordering::Relaxed);
         log::info!("router {}: dropping invalid ipv4 packet", addr);
         return;
     };
@@ -130,8 +170,10 @@ fn forward_packet(
         for route in routes {
             if route.dest().contains(dest) || dest.is_broadcast() || dest.is_multicast() {
                 if !*en {
+                    counters.disabled.fetch_add(1, Ordering::Relaxed);
                     log::trace!("router {}: route {:?} disabled", addr, route);
                 } else {
+                    counters.forwarded.fetch_add(1, Ordering::Relaxed);
                     log::trace!("router {}: routing packet on route {:?}", addr, route);
                     tx.unbounded_send(bytes.clone());
                     forwarded = true;
@@ -141,6 +183,7 @@ fn forward_packet(
     }
     if !forwarded {
         let src = packet.get_source();
+        counters.unroutable.fetch_add(1, Ordering::Relaxed);
         log::debug!(
             "router {}: dropping unroutable packet from {} to {}",
             addr,
